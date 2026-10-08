@@ -246,11 +246,9 @@ export function createApp(store, config, injected = {}) {
           `${lead.fullName}\n${lead.email}\n${lead.phone}\nÇalışan: ${lead.employees}\nModüller: ${lead.modules.map(moduleName).join(', ')}\nNot: ${lead.notes}\n\nİnceleyin: ${config.publicUrl}/admin`,
         );
       });
-    res
-      .status(202)
-      .json({
-        message: 'Talebiniz alındı. Ekibimiz inceledikten sonra e-posta ile bilgi verecek.',
-      });
+    res.status(202).json({
+      message: 'Talebiniz alındı. Ekibimiz inceledikten sonra e-posta ile bilgi verecek.',
+    });
   });
   app.post('/api/admin/login', authLimit, (req, res) => {
     const input = z
@@ -396,11 +394,9 @@ export function createApp(store, config, injected = {}) {
         .get(digest(raw), time());
       const lead = link ? store.lead(link.lead_id) : null;
       if (!lead || !validLicense(lead))
-        return res
-          .status(403)
-          .json({
-            message: 'Bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni davet isteyin.',
-          });
+        return res.status(403).json({
+          message: 'Bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni davet isteyin.',
+        });
       store.db.prepare('UPDATE links SET used=1 WHERE hash=? AND used=0').run(digest(raw));
       issueSession(res, 'demo', lead.id, future(1 / 3));
       store.audit('demo.login', lead.id, lead.email);
@@ -589,21 +585,17 @@ export function createApp(store, config, injected = {}) {
   app.use((error, _req, res, next) => {
     if (res.headersSent) return next(error);
     if (error instanceof z.ZodError)
-      return res
-        .status(400)
-        .json({
-          message: 'Lütfen alanları kontrol edin.',
-          fields: error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-        });
+      return res.status(400).json({
+        message: 'Lütfen alanları kontrol edin.',
+        fields: error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      });
     if (error.type === 'entity.parse.failed' || error.type === 'entity.too.large')
       return res.status(400).json({ message: 'Geçersiz veya çok büyük istek.' });
     console.error('API error:', error.message);
-    res
-      .status(503)
-      .json({
-        message:
-          'İşlem tamamlanamadı. Tekrar deneyin; devam ederse bağlantı ayarlarını kontrol edin.',
-      });
+    res.status(503).json({
+      message:
+        'İşlem tamamlanamadı. Tekrar deneyin; devam ederse bağlantı ayarlarını kontrol edin.',
+    });
   });
   return app;
 }

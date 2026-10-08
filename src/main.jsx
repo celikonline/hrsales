@@ -118,14 +118,21 @@ const Icons = {
   Timer,
   Circle,
 };
-import '@fontsource-variable/manrope';
+import '@fontsource-variable/zalando-sans';
+import './styles.css';
+import {
+  MegaNavigation,
+  ResourcePage,
+  MarketingPage,
+  DiscoverTeaser,
+  PlatformSections,
+} from './discover.jsx';
 import {
   modules as fallbackModules,
   plans as fallbackPlans,
   moduleName,
   planName,
 } from '../shared/catalog.js';
-import './styles.css';
 
 function Icon({ name, size = 20, ...props }) {
   const Component = Icons[name] || Icons.Sparkles;
@@ -236,12 +243,7 @@ function Header({ catalog }) {
         <div className="container nav">
           <Logo />
           <nav aria-label="Ana menü" className={open ? 'is-open' : ''}>
-            <a href="/#moduller">
-              Modüller <Icon name="ChevronDown" size={13} />
-            </a>
-            <a href="/#neden-senseik">Neden SenseIK?</a>
-            <a href="/#paketler">Paketler</a>
-            <a href="/#sorular">Sıkça sorulanlar</a>
+            <MegaNavigation catalog={catalog} />
           </nav>
           <div className="nav-actions">
             <a href="/giris" className="login-link">
@@ -280,6 +282,12 @@ function Footer({ catalog }) {
           <a href="/#moduller">İK modülleri</a>
           <a href="/#paketler">Paket & lisans</a>
           <a href="/#nasil-calisir">Nasıl başlarsınız?</a>
+          <a href="/sektorler">Sektör çözümleri</a>
+          <a href="/kesfet">Keşfet merkezi</a>
+          <a href="/raporlar">PDF rehberler</a>
+          <a href="/hesaplama-araclari">Hesaplama araçları</a>
+          <a href="/hakkimizda">Hakkımızda</a>
+          <a href="/iletisim">İletişim</a>
         </div>
         <div>
           <h4>Birlikte başlayalım</h4>
@@ -688,7 +696,7 @@ function Landing({ catalog }) {
           </SectionTitle>
           <div className="module-grid">
             {visibleModules.map((m, i) => (
-              <a href={`/demo-talebi?modul=${m.key}`} className="module-card" key={m.key}>
+              <a href={`/urunler/${m.key}`} className="module-card" key={m.key}>
                 <span className={`module-icon ${['lilac', 'mint', 'peach'][i % 3]}`}>
                   <Icon name={m.icon} size={25} />
                 </span>
@@ -831,6 +839,8 @@ function Landing({ catalog }) {
             <Plans catalog={catalog} />
           </div>
         </section>
+        <PlatformSections />
+        <DiscoverTeaser />
         <section className="section container faq" id="sorular">
           <SectionTitle
             center={false}
@@ -2559,6 +2569,44 @@ function App() {
     <Login catalog={catalog} />
   ) : path === '/gizlilik' ? (
     <Privacy catalog={catalog} />
+  ) : ['/kesfet', '/raporlar', '/hesaplama-araclari', '/blog', '/ik-olgunluk-testi'].some(
+      (p) => path === p || path.startsWith(`${p}/`),
+    ) ? (
+    <>
+      <Header catalog={catalog} />
+      <main>
+        <ResourcePage path={path} />
+      </main>
+      <Footer catalog={catalog} />
+    </>
+  ) : [
+      '/urunler',
+      '/cozumler',
+      '/sektorler',
+      '/neden-senseik',
+      '/fiyatlar',
+      '/hakkimizda',
+      '/iletisim',
+      '/sss',
+      '/guvenlik',
+      '/destek',
+      '/musteriler',
+      '/entegrasyonlar',
+      '/donanim',
+      '/calisan-deneyimi',
+    ].some((p) => path === p || path.startsWith(`${p}/`)) ? (
+    <>
+      <Header catalog={catalog} />
+      <main>
+        <MarketingPage
+          path={path}
+          catalog={catalog}
+          ProductPreview={ProductPreview}
+          Plans={Plans}
+        />
+      </main>
+      <Footer catalog={catalog} />
+    </>
   ) : path === '/' ? (
     <Landing catalog={catalog} />
   ) : (

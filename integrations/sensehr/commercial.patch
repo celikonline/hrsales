@@ -1,5 +1,5 @@
 diff --git a/src/Modules/Employee/Sense.Modules.Employee.Infrastructure/Persistence/EmployeeDbContext.cs b/src/Modules/Employee/Sense.Modules.Employee.Infrastructure/Persistence/EmployeeDbContext.cs
-index 9223b125..4c7c46dc 100644
+index 9223b125..6a871fea 100644
 --- a/src/Modules/Employee/Sense.Modules.Employee.Infrastructure/Persistence/EmployeeDbContext.cs
 +++ b/src/Modules/Employee/Sense.Modules.Employee.Infrastructure/Persistence/EmployeeDbContext.cs
 @@ -9,6 +9,7 @@ using Sense.Modules.Employee.Domain.Employees;
@@ -20,7 +20,7 @@ index 9223b125..4c7c46dc 100644
      : ModuleDbContext(options, tenantContext)
  {
      public const string SchemaName = "employee";
-@@ -27,6 +29,38 @@ public sealed class EmployeeDbContext(DbContextOptions<EmployeeDbContext> option
+@@ -27,6 +29,33 @@ public sealed class EmployeeDbContext(DbContextOptions<EmployeeDbContext> option
  
      public DbSet<EmployeeEntity> Employees => Set<EmployeeEntity>();
  
@@ -31,34 +31,66 @@ index 9223b125..4c7c46dc 100644
 +        if (added.Length == 0 || commercialEntitlements is null)
 +            return await base.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 +
-+        // Serialize capacity-changing writes across API instances. Imports and ATS use the same persistence guard.
-+        var ownedTransaction = Database.CurrentTransaction is null
-+            ? await Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false) : null;
-+        try
++        // Serialize capacity-changing writes across API instances. Execute through ModuleDbContext's retry-aware
++        // transaction helper so Npgsql's configured execution strategy accepts the user-created transaction.
++        var saved = 0;
++        await ExecuteInTransactionAsync(async ct =>
 +        {
 +            foreach (var group in added.GroupBy(e => e.Entity.TenantId))
 +            {
-+                var limit = await commercialEntitlements.GetEmployeeLimitAsync(group.Key, cancellationToken).ConfigureAwait(false);
++                var limit = await commercialEntitlements.GetEmployeeLimitAsync(group.Key, ct).ConfigureAwait(false);
 +                if (limit is null) continue;
 +                var lockKey = group.Key.ToString();
-+                await Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken).ConfigureAwait(false);
-+                var existingCount = await Employees.IgnoreQueryFilters().CountAsync(e => e.TenantId == group.Key, cancellationToken).ConfigureAwait(false);
++                await Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", ct).ConfigureAwait(false);
++                var existingCount = await Employees.IgnoreQueryFilters().CountAsync(e => e.TenantId == group.Key, ct).ConfigureAwait(false);
 +                // Capacity covers retained employee records, including drafts, so an import cannot bypass the limit.
 +                if (existingCount + group.Count() > limit) throw new CommercialCapacityExceededException(limit.Value);
 +            }
-+            var saved = await base.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-+            if (ownedTransaction is not null) await ownedTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-+            return saved;
-+        }
-+        finally
-+        {
-+            if (ownedTransaction is not null) await ownedTransaction.DisposeAsync().ConfigureAwait(false);
-+        }
++            saved = await base.SaveChangesAsync(ct).ConfigureAwait(false);
++        }, cancellationToken).ConfigureAwait(false);
++        return saved;
 +    }
 +
      public DbSet<CustomFieldDefinition> CustomFieldDefinitions => Set<CustomFieldDefinition>();
  
      public DbSet<TerminationReason> TerminationReasons => Set<TerminationReason>();
+diff --git a/src/Modules/Identity/Sense.Modules.Identity.Api/Controllers/CommercialController.cs b/src/Modules/Identity/Sense.Modules.Identity.Api/Controllers/CommercialController.cs
+new file mode 100644
+index 00000000..97e70eb3
+--- /dev/null
++++ b/src/Modules/Identity/Sense.Modules.Identity.Api/Controllers/CommercialController.cs
+@@ -0,0 +1,31 @@
++using Asp.Versioning;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++using Sense.Modules.Identity.Application.Tenants;
++using Sense.Modules.Identity.Domain.Tenants;
++using Sense.Shared.Web.Controllers;
++
++namespace Sense.Modules.Identity.Api.Controllers;
++
++public sealed record CommercialProvisionRequest(string CompanyName, string Slug, string OwnerEmail,
++    string OwnerFirstName, string OwnerLastName, string? Phone, CommercialLicense License);
++
++/// <summary>Sales integration uses a platform JWT. No anonymous tenant creation or entitlement changes.</summary>
++[ApiVersion(ApiRoutes.DefaultVersion)]
++[Route(ApiRoutes.VersionedBase + "/identity/commercial")]
++[Authorize]
++public sealed class CommercialController : ApiControllerBase
++{
++    [HttpPost("provision")]
++    public async Task<IActionResult> Provision([FromBody] CommercialProvisionRequest request, CancellationToken ct) =>
++        FromResult(await Dispatcher.Send(new CreateTenantCommand(request.CompanyName, request.Slug, request.OwnerEmail,
++            request.OwnerFirstName, request.OwnerLastName, TenantOwnerMode.Invite, null, request.Phone, "tr", request.License), ct));
++
++    [HttpPost("{id:guid}/license")]
++    public async Task<IActionResult> SetLicense(Guid id, [FromBody] CommercialLicense license, CancellationToken ct) =>
++        FromResult(await Dispatcher.Send(new SetCommercialLicenseCommand(id, license), ct));
++
++    [HttpGet("mine")]
++    public async Task<IActionResult> Mine(CancellationToken ct) =>
++        FromResult(await Dispatcher.Query(new GetMyCommercialLicenseQuery(), ct));
++}
 diff --git a/src/Modules/Identity/Sense.Modules.Identity.Api/IdentityModule.cs b/src/Modules/Identity/Sense.Modules.Identity.Api/IdentityModule.cs
 index d7e0b084..528d6bbf 100644
 --- a/src/Modules/Identity/Sense.Modules.Identity.Api/IdentityModule.cs
@@ -127,184 +159,6 @@ index 9868c8ac..0c5407eb 100644
          {
              return Error.Unauthorized(IdentityErrors.RefreshTokenInvalid);
          }
-diff --git a/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs b/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs
-index c13a44e4..40089d34 100644
---- a/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs
-+++ b/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs
-@@ -40,9 +40,9 @@ public sealed record CreateTenantCommand(
-     TenantOwnerMode OwnerMode,
-     string? Password,
-     string? Phone,
--    string? Language) : ICommand<CreateTenantResult>;
-+    string? Language, CommercialLicense? License = null) : ICommand<CreateTenantResult>;
- 
--public sealed record CreateTenantResult(Guid TenantId, string Slug, Guid OwnerUserId, bool InvitationSent);
-+public sealed record CreateTenantResult(Guid TenantId, string Slug, Guid OwnerUserId, bool InvitationSent, string? InvitationUrl = null);
- 
- public sealed class CreateTenantValidator : AbstractValidator<CreateTenantCommand>
- {
-@@ -54,6 +54,7 @@ public sealed class CreateTenantValidator : AbstractValidator<CreateTenantComman
-         RuleFor(x => x.OwnerFirstName).NotEmpty().MaximumLength(IdentityLimits.NameMaxLength);
-         RuleFor(x => x.OwnerLastName).NotEmpty().MaximumLength(IdentityLimits.NameMaxLength);
-         RuleFor(x => x.OwnerMode).IsInEnum();
-+        When(x => x.License is not null, () => RuleFor(x => x.License!).SetValidator(new CommercialLicenseValidator()));
- 
-         When(x => x.OwnerMode == TenantOwnerMode.Password, () =>
-         {
-@@ -104,7 +105,21 @@ public sealed class CreateTenantHandler(
-         var now = clock.GetUtcNow().UtcDateTime;
-         var slug = command.Slug.Trim().ToLowerInvariant();
- 
--        if (PlatformTenant.IsPlatform(slug) || await tenants.SlugExistsAsync(slug, cancellationToken).ConfigureAwait(false))
-+        var existing = await tenants.GetBySlugAsync(slug, cancellationToken).ConfigureAwait(false);
-+        if (existing is not null && command.License is not null && CommercialLicense.Read(existing.SettingsJson)?.Reference == command.License.Reference)
-+        {
-+            // Retrying after an HTTP timeout must never create a second company or broaden an existing license.
-+            using var retryScope = tenantSetter.BeginScope(existing.Id, existing.Slug);
-+            var existingOwner = await users.GetByEmailAsync(command.OwnerEmail, cancellationToken).ConfigureAwait(false);
-+            if (existingOwner is null) return Error.Conflict(IdentityErrors.TenantSlugTaken);
-+            if (existingOwner.PasswordHash is not null) return new CreateTenantResult(existing.Id, existing.Slug, existingOwner.Id, false);
-+            var pending = await invitations.GetPendingByUserAsync(existingOwner.Id, cancellationToken).ConfigureAwait(false);
-+            pending?.Revoke();
-+            _ = AddOwnerInvitation(existing.Id, existingOwner, callerId, now, cfg, out var renewedToken);
-+            await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-+            return new CreateTenantResult(existing.Id, existing.Slug, existingOwner.Id, false, links.InviteAccept(renewedToken));
-+        }
-+        if (PlatformTenant.IsPlatform(slug) || existing is not null)
-         {
-             return Error.Conflict(IdentityErrors.TenantSlugTaken);
-         }
-@@ -116,6 +131,7 @@ public sealed class CreateTenantHandler(
-         }
- 
-         var tenant = tenantResult.Value;
-+        if (command.License is not null) tenant.UpdateSettings(command.License.WriteTo(tenant.SettingsJson));
-         tenants.Add(tenant);
- 
-         // Bu noktadan sonra yazılan tüm kiracı verileri yeni kiracıya ait olmalı. Kayıt bu kapsam İÇİNDE yapılır: çağıranın
-@@ -155,13 +171,14 @@ public sealed class CreateTenantHandler(
- 
-         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
- 
--        if (invitation is not null && rawToken is not null)
-+        if (invitation is not null && rawToken is not null && command.License is null)
-         {
-             await mailer.SendInvitationAsync(owner.Email, owner.FullName, tenant.Name, links.InviteAccept(rawToken), invitation.ExpiresAt, cancellationToken)
-                 .ConfigureAwait(false);
-         }
- 
--        return new CreateTenantResult(tenant.Id, tenant.Slug, owner.Id, invitation is not null);
-+        return new CreateTenantResult(tenant.Id, tenant.Slug, owner.Id, invitation is not null && command.License is null,
-+            command.License is not null && rawToken is not null ? links.InviteAccept(rawToken) : null);
-     }
- 
-     private Invitation AddOwnerInvitation(Guid tenantId, User owner, Guid invitedBy, DateTime now, IdentityOptions cfg, out string rawToken)
-diff --git a/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs b/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs
-index 53cd0b66..e75f17b4 100644
---- a/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs
-+++ b/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs
-@@ -31,6 +31,10 @@ public sealed class ModuleAccessService(
-         }
- 
-         var tenantId = tenant.TenantId;
-+        // Sales-managed entitlements are checked directly; a revoked or upgraded license must not wait for cache expiry.
-+        var salesTenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken).ConfigureAwait(false);
-+        if (salesTenant is not null && Sense.Modules.Identity.Domain.Tenants.CommercialLicense.Read(salesTenant.SettingsJson) is not null)
-+            return Sense.Modules.Identity.Application.Tenants.CommercialLicenseRules.DisabledModules(salesTenant);
-         return await cache.GetOrCreateInContextAsync(
-             Key(tenantId),
-             async ct => await LoadAsync(tenantId, ct).ConfigureAwait(false),
-@@ -57,7 +61,7 @@ public sealed class ModuleAccessService(
-             .FirstOrDefaultAsync(t => t.Id == tenantId, ct)
-             .ConfigureAwait(false);
- 
--        return current?.ModuleSettings.DisabledModules.ToArray() ?? [];
-+        return current is null ? [] : Sense.Modules.Identity.Application.Tenants.CommercialLicenseRules.DisabledModules(current).ToArray();
-     }
- 
-     private static string Key(Guid tenantId) => CacheKeys.Join(ModuleCacheKeyPrefixes.DisabledModules, tenantId.ToString("N"));
-diff --git a/src/Sense.Api/Program.cs b/src/Sense.Api/Program.cs
-index 5180036d..3e65453b 100644
---- a/src/Sense.Api/Program.cs
-+++ b/src/Sense.Api/Program.cs
-@@ -89,6 +89,7 @@ try
- 
-     app.UseAuthentication();
-     app.UseRequestContext();
-+    app.UseMiddleware<CommercialLicenseMiddleware>();
-     app.UseAuthorization();
- 
-     app.MapControllers();
-diff --git a/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs b/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs
-index 452d340b..582e36da 100644
---- a/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs
-+++ b/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs
-@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics;
- using Microsoft.AspNetCore.Mvc;
- using Microsoft.Extensions.Options;
- using Sense.Shared.Contracts.Configuration;
-+using Sense.Shared.Contracts.Modules;
- using Sense.Shared.Infrastructure.Persistence;
- using Sense.Shared.Kernel.Results;
- using Sense.Shared.Web.Controllers;
-@@ -66,6 +67,7 @@ public sealed partial class GlobalExceptionHandler(
-     {
-         ValidationException v => (ErrorType.Validation, ErrorCodes.ValidationError, ToErrorDictionary(v), StatusCodes.Status400BadRequest),
-         TenantMismatchException => (ErrorType.Forbidden, ErrorCodes.TenantMismatch, null, StatusCodes.Status403Forbidden),
-+        CommercialCapacityExceededException => (ErrorType.Rule, "commercial.employee_capacity_exceeded", null, StatusCodes.Status409Conflict),
-         UnauthorizedAccessException => (ErrorType.Unauthorized, ErrorCodes.Unauthenticated, null, StatusCodes.Status401Unauthorized),
-         OperationCanceledException => (ErrorType.Failure, ErrorCodes.RequestCancelled, null, ClientClosedRequest),
-         Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => (ErrorType.Conflict, ErrorCodes.ConcurrencyConflict, null, StatusCodes.Status409Conflict),
-diff --git a/web/src/layouts/app-layout.tsx b/web/src/layouts/app-layout.tsx
-index 10a9c23b..6438d593 100644
---- a/web/src/layouts/app-layout.tsx
-+++ b/web/src/layouts/app-layout.tsx
-@@ -35,6 +35,7 @@ import { APP_LAUNCHER_ITEMS, NAV_ITEMS, navIconColor } from "@/config/navigation
- import { NotificationsMenu } from "@/components/notifications/notification-bell";
- import RouteBoundary from "@/components/route-boundary";
- import SetupGuard from "@/components/setup-guard";
-+import { CommercialLicenseBanner } from "@/components/commercial-license-banner";
- import SettingsSubNav from "@/components/settings-subnav";
- import ScreenSearch from "@/components/screen-search";
- import ModuleRouteGuard from "@/components/module-disabled";
-@@ -430,6 +431,7 @@ export default function AppLayout() {
-               {/* Keeps the sidebar and header on screen while the next page's chunk loads. */}
-               <RouteBoundary>
-                 <ModuleRouteGuard>
-+                  <CommercialLicenseBanner />
-                   <SetupGuard />
-                 </ModuleRouteGuard>
-               </RouteBoundary>
-diff --git a/src/Modules/Identity/Sense.Modules.Identity.Domain/Tenants/CommercialLicense.cs b/src/Modules/Identity/Sense.Modules.Identity.Domain/Tenants/CommercialLicense.cs
-new file mode 100644
-index 00000000..dd3dcae4
---- /dev/null
-+++ b/src/Modules/Identity/Sense.Modules.Identity.Domain/Tenants/CommercialLicense.cs
-@@ -0,0 +1,24 @@
-+using System.Text.Json;
-+using System.Text.Json.Nodes;
-+
-+namespace Sense.Modules.Identity.Domain.Tenants;
-+
-+/// <summary>Sales-managed entitlement. Persisted in the existing settings JSON; legacy tenants are unchanged.</summary>
-+public sealed record CommercialLicense(string Status, string Plan, IReadOnlyList<string> Modules, int EmployeeLimit, DateTime ExpiresAt, string Reference)
-+{
-+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-+    public bool IsAccessible(DateTime nowUtc) => Status is "trial" or "active" && ExpiresAt > nowUtc;
-+
-+    public static CommercialLicense? Read(string settingsJson)
-+    {
-+        var root = JsonNode.Parse(settingsJson);
-+        return root?["commercialLicense"]?.Deserialize<CommercialLicense>(JsonOptions);
-+    }
-+
-+    public string WriteTo(string settingsJson)
-+    {
-+        var root = JsonNode.Parse(settingsJson) as JsonObject ?? new JsonObject();
-+        root["commercialLicense"] = JsonSerializer.SerializeToNode(this, JsonOptions);
-+        return root.ToJsonString();
-+    }
-+}
 diff --git a/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CommercialLicensing.cs b/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CommercialLicensing.cs
 new file mode 100644
 index 00000000..57119c8a
@@ -386,42 +240,160 @@ index 00000000..57119c8a
 +        return Result.Success<CommercialLicense?>(CommercialLicense.Read(tenant.SettingsJson));
 +    }
 +}
-diff --git a/src/Modules/Identity/Sense.Modules.Identity.Api/Controllers/CommercialController.cs b/src/Modules/Identity/Sense.Modules.Identity.Api/Controllers/CommercialController.cs
+diff --git a/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs b/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs
+index c13a44e4..40089d34 100644
+--- a/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs
++++ b/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs
+@@ -40,9 +40,9 @@ public sealed record CreateTenantCommand(
+     TenantOwnerMode OwnerMode,
+     string? Password,
+     string? Phone,
+-    string? Language) : ICommand<CreateTenantResult>;
++    string? Language, CommercialLicense? License = null) : ICommand<CreateTenantResult>;
+ 
+-public sealed record CreateTenantResult(Guid TenantId, string Slug, Guid OwnerUserId, bool InvitationSent);
++public sealed record CreateTenantResult(Guid TenantId, string Slug, Guid OwnerUserId, bool InvitationSent, string? InvitationUrl = null);
+ 
+ public sealed class CreateTenantValidator : AbstractValidator<CreateTenantCommand>
+ {
+@@ -54,6 +54,7 @@ public sealed class CreateTenantValidator : AbstractValidator<CreateTenantComman
+         RuleFor(x => x.OwnerFirstName).NotEmpty().MaximumLength(IdentityLimits.NameMaxLength);
+         RuleFor(x => x.OwnerLastName).NotEmpty().MaximumLength(IdentityLimits.NameMaxLength);
+         RuleFor(x => x.OwnerMode).IsInEnum();
++        When(x => x.License is not null, () => RuleFor(x => x.License!).SetValidator(new CommercialLicenseValidator()));
+ 
+         When(x => x.OwnerMode == TenantOwnerMode.Password, () =>
+         {
+@@ -104,7 +105,21 @@ public sealed class CreateTenantHandler(
+         var now = clock.GetUtcNow().UtcDateTime;
+         var slug = command.Slug.Trim().ToLowerInvariant();
+ 
+-        if (PlatformTenant.IsPlatform(slug) || await tenants.SlugExistsAsync(slug, cancellationToken).ConfigureAwait(false))
++        var existing = await tenants.GetBySlugAsync(slug, cancellationToken).ConfigureAwait(false);
++        if (existing is not null && command.License is not null && CommercialLicense.Read(existing.SettingsJson)?.Reference == command.License.Reference)
++        {
++            // Retrying after an HTTP timeout must never create a second company or broaden an existing license.
++            using var retryScope = tenantSetter.BeginScope(existing.Id, existing.Slug);
++            var existingOwner = await users.GetByEmailAsync(command.OwnerEmail, cancellationToken).ConfigureAwait(false);
++            if (existingOwner is null) return Error.Conflict(IdentityErrors.TenantSlugTaken);
++            if (existingOwner.PasswordHash is not null) return new CreateTenantResult(existing.Id, existing.Slug, existingOwner.Id, false);
++            var pending = await invitations.GetPendingByUserAsync(existingOwner.Id, cancellationToken).ConfigureAwait(false);
++            pending?.Revoke();
++            _ = AddOwnerInvitation(existing.Id, existingOwner, callerId, now, cfg, out var renewedToken);
++            await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
++            return new CreateTenantResult(existing.Id, existing.Slug, existingOwner.Id, false, links.InviteAccept(renewedToken));
++        }
++        if (PlatformTenant.IsPlatform(slug) || existing is not null)
+         {
+             return Error.Conflict(IdentityErrors.TenantSlugTaken);
+         }
+@@ -116,6 +131,7 @@ public sealed class CreateTenantHandler(
+         }
+ 
+         var tenant = tenantResult.Value;
++        if (command.License is not null) tenant.UpdateSettings(command.License.WriteTo(tenant.SettingsJson));
+         tenants.Add(tenant);
+ 
+         // Bu noktadan sonra yazılan tüm kiracı verileri yeni kiracıya ait olmalı. Kayıt bu kapsam İÇİNDE yapılır: çağıranın
+@@ -155,13 +171,14 @@ public sealed class CreateTenantHandler(
+ 
+         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+ 
+-        if (invitation is not null && rawToken is not null)
++        if (invitation is not null && rawToken is not null && command.License is null)
+         {
+             await mailer.SendInvitationAsync(owner.Email, owner.FullName, tenant.Name, links.InviteAccept(rawToken), invitation.ExpiresAt, cancellationToken)
+                 .ConfigureAwait(false);
+         }
+ 
+-        return new CreateTenantResult(tenant.Id, tenant.Slug, owner.Id, invitation is not null);
++        return new CreateTenantResult(tenant.Id, tenant.Slug, owner.Id, invitation is not null && command.License is null,
++            command.License is not null && rawToken is not null ? links.InviteAccept(rawToken) : null);
+     }
+ 
+     private Invitation AddOwnerInvitation(Guid tenantId, User owner, Guid invitedBy, DateTime now, IdentityOptions cfg, out string rawToken)
+diff --git a/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/ModuleSettingsUseCases.cs b/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/ModuleSettingsUseCases.cs
+index 95bf8adc..ece9627c 100644
+--- a/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/ModuleSettingsUseCases.cs
++++ b/src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/ModuleSettingsUseCases.cs
+@@ -9,7 +9,7 @@ using Sense.Shared.Kernel.Results;
+ namespace Sense.Modules.Identity.Application.Tenants;
+ 
+ /// <summary>Modüller sayfasının tek satırı: katalogdaki modül, temel (kapatılamaz) mı, bu kiracı için açık mı.</summary>
+-public sealed record ModuleSettingItemDto(string Key, bool IsCore, bool Enabled);
++public sealed record ModuleSettingItemDto(string Key, bool IsCore, bool Enabled, bool IsLicensed = true);
+ 
+ /// <summary>
+ /// Ayarlar &gt; Sistem ayarları &gt; Modüller (senseik-057). <see cref="Modules"/> tüm katalog (<see cref="ProductModules.All"/>
+@@ -20,6 +20,14 @@ public sealed record ModuleSettingsDto(IReadOnlyList<ModuleSettingItemDto> Modul
+     public static ModuleSettingsDto From(TenantModuleSettings settings) => new(
+         ProductModules.All.Select(m => new ModuleSettingItemDto(m.Key, !m.IsToggleable, !settings.IsDisabled(m.Key))).ToList(),
+         settings.DisabledModules);
++
++    public static ModuleSettingsDto From(Tenant tenant)
++    {
++        var license = CommercialLicense.Read(tenant.SettingsJson);
++        var disabled = CommercialLicenseRules.DisabledModules(tenant);
++        return new(ProductModules.All.Select(m => new ModuleSettingItemDto(m.Key, !m.IsToggleable,
++            !disabled.Contains(m.Key), !m.IsToggleable || license is null || license.Modules.Contains(m.Key))).ToList(), disabled);
++    }
+ }
+ 
+ /// <summary>Modül ayarlarını okur. Erişim ayarları/güvenlik politikasıyla aynı desen: "identity.tenant.view" yeterli,
+@@ -38,7 +46,7 @@ public sealed class GetModuleSettingsHandler(ITenantRepository tenants, ITenantC
+             return Error.NotFound(IdentityErrors.TenantNotFound);
+         }
+ 
+-        return ModuleSettingsDto.From(tenant.ModuleSettings);
++        return ModuleSettingsDto.From(tenant);
+     }
+ }
+ 
+@@ -69,7 +77,14 @@ public sealed class UpdateModuleSettingsHandler(
+             return Error.NotFound(IdentityErrors.TenantNotFound);
+         }
+ 
+-        tenant.UpdateModuleSettings(TenantModuleSettings.WithDisabled(requested));
++        var license = CommercialLicense.Read(tenant.SettingsJson);
++        if (license is not null && ProductModules.All.Any(m => m.IsToggleable &&
++            !license.Modules.Contains(m.Key) && !requested.Contains(m.Key)))
++            return Error.Forbidden("commercial.module.not_licensed");
++
++        // License exclusions are derived, not user preferences: storing them would keep a future upgrade disabled.
++        var stored = license is null ? requested : requested.Where(license.Modules.Contains).ToArray();
++        tenant.UpdateModuleSettings(TenantModuleSettings.WithDisabled(stored));
+         await cache.InvalidateTenantAsync(tenant.Id, cancellationToken).ConfigureAwait(false);
+         return Result.Success();
+     }
+diff --git a/src/Modules/Identity/Sense.Modules.Identity.Domain/Tenants/CommercialLicense.cs b/src/Modules/Identity/Sense.Modules.Identity.Domain/Tenants/CommercialLicense.cs
 new file mode 100644
-index 00000000..97e70eb3
+index 00000000..dd3dcae4
 --- /dev/null
-+++ b/src/Modules/Identity/Sense.Modules.Identity.Api/Controllers/CommercialController.cs
-@@ -0,0 +1,31 @@
-+using Asp.Versioning;
-+using Microsoft.AspNetCore.Authorization;
-+using Microsoft.AspNetCore.Mvc;
-+using Sense.Modules.Identity.Application.Tenants;
-+using Sense.Modules.Identity.Domain.Tenants;
-+using Sense.Shared.Web.Controllers;
++++ b/src/Modules/Identity/Sense.Modules.Identity.Domain/Tenants/CommercialLicense.cs
+@@ -0,0 +1,24 @@
++using System.Text.Json;
++using System.Text.Json.Nodes;
 +
-+namespace Sense.Modules.Identity.Api.Controllers;
++namespace Sense.Modules.Identity.Domain.Tenants;
 +
-+public sealed record CommercialProvisionRequest(string CompanyName, string Slug, string OwnerEmail,
-+    string OwnerFirstName, string OwnerLastName, string? Phone, CommercialLicense License);
-+
-+/// <summary>Sales integration uses a platform JWT. No anonymous tenant creation or entitlement changes.</summary>
-+[ApiVersion(ApiRoutes.DefaultVersion)]
-+[Route(ApiRoutes.VersionedBase + "/identity/commercial")]
-+[Authorize]
-+public sealed class CommercialController : ApiControllerBase
++/// <summary>Sales-managed entitlement. Persisted in the existing settings JSON; legacy tenants are unchanged.</summary>
++public sealed record CommercialLicense(string Status, string Plan, IReadOnlyList<string> Modules, int EmployeeLimit, DateTime ExpiresAt, string Reference)
 +{
-+    [HttpPost("provision")]
-+    public async Task<IActionResult> Provision([FromBody] CommercialProvisionRequest request, CancellationToken ct) =>
-+        FromResult(await Dispatcher.Send(new CreateTenantCommand(request.CompanyName, request.Slug, request.OwnerEmail,
-+            request.OwnerFirstName, request.OwnerLastName, TenantOwnerMode.Invite, null, request.Phone, "tr", request.License), ct));
++    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
++    public bool IsAccessible(DateTime nowUtc) => Status is "trial" or "active" && ExpiresAt > nowUtc;
 +
-+    [HttpPost("{id:guid}/license")]
-+    public async Task<IActionResult> SetLicense(Guid id, [FromBody] CommercialLicense license, CancellationToken ct) =>
-+        FromResult(await Dispatcher.Send(new SetCommercialLicenseCommand(id, license), ct));
++    public static CommercialLicense? Read(string settingsJson)
++    {
++        var root = JsonNode.Parse(settingsJson);
++        return root?["commercialLicense"]?.Deserialize<CommercialLicense>(JsonOptions);
++    }
 +
-+    [HttpGet("mine")]
-+    public async Task<IActionResult> Mine(CancellationToken ct) =>
-+        FromResult(await Dispatcher.Query(new GetMyCommercialLicenseQuery(), ct));
++    public string WriteTo(string settingsJson)
++    {
++        var root = JsonNode.Parse(settingsJson) as JsonObject ?? new JsonObject();
++        root["commercialLicense"] = JsonSerializer.SerializeToNode(this, JsonOptions);
++        return root.ToJsonString();
++    }
 +}
 diff --git a/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/CommercialEntitlements.cs b/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/CommercialEntitlements.cs
 new file mode 100644
@@ -444,6 +416,30 @@ index 00000000..b940b5dd
 +        return tenant is null ? null : CommercialLicense.Read(tenant.SettingsJson)?.EmployeeLimit;
 +    }
 +}
+diff --git a/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs b/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs
+index 53cd0b66..e75f17b4 100644
+--- a/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs
++++ b/src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs
+@@ -31,6 +31,10 @@ public sealed class ModuleAccessService(
+         }
+ 
+         var tenantId = tenant.TenantId;
++        // Sales-managed entitlements are checked directly; a revoked or upgraded license must not wait for cache expiry.
++        var salesTenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken).ConfigureAwait(false);
++        if (salesTenant is not null && Sense.Modules.Identity.Domain.Tenants.CommercialLicense.Read(salesTenant.SettingsJson) is not null)
++            return Sense.Modules.Identity.Application.Tenants.CommercialLicenseRules.DisabledModules(salesTenant);
+         return await cache.GetOrCreateInContextAsync(
+             Key(tenantId),
+             async ct => await LoadAsync(tenantId, ct).ConfigureAwait(false),
+@@ -57,7 +61,7 @@ public sealed class ModuleAccessService(
+             .FirstOrDefaultAsync(t => t.Id == tenantId, ct)
+             .ConfigureAwait(false);
+ 
+-        return current?.ModuleSettings.DisabledModules.ToArray() ?? [];
++        return current is null ? [] : Sense.Modules.Identity.Application.Tenants.CommercialLicenseRules.DisabledModules(current).ToArray();
+     }
+ 
+     private static string Key(Guid tenantId) => CacheKeys.Join(ModuleCacheKeyPrefixes.DisabledModules, tenantId.ToString("N"));
 diff --git a/src/Sense.Api/Middleware/CommercialLicenseMiddleware.cs b/src/Sense.Api/Middleware/CommercialLicenseMiddleware.cs
 new file mode 100644
 index 00000000..6a6a97bc
@@ -474,6 +470,31 @@ index 00000000..6a6a97bc
 +        await next(http).ConfigureAwait(false);
 +    }
 +}
+diff --git a/src/Sense.Api/Program.cs b/src/Sense.Api/Program.cs
+index 5180036d..3e65453b 100644
+--- a/src/Sense.Api/Program.cs
++++ b/src/Sense.Api/Program.cs
+@@ -89,6 +89,7 @@ try
+ 
+     app.UseAuthentication();
+     app.UseRequestContext();
++    app.UseMiddleware<CommercialLicenseMiddleware>();
+     app.UseAuthorization();
+ 
+     app.MapControllers();
+diff --git a/src/Sense.Worker/Dockerfile b/src/Sense.Worker/Dockerfile
+index ae620621..275841a1 100644
+--- a/src/Sense.Worker/Dockerfile
++++ b/src/Sense.Worker/Dockerfile
+@@ -4,7 +4,7 @@
+ #   docker build -f src/Sense.Worker/Dockerfile -t senseik-worker .
+ 
+ # Pinned to the exact SDK patch in global.json - see src/Sense.Api/Dockerfile for why.
+-FROM mcr.microsoft.com/dotnet/sdk:10.0.100 AS build
++FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
+ WORKDIR /src
+ 
+ COPY Directory.Build.props Directory.Packages.props global.json .editorconfig ./
 diff --git a/src/Shared/Sense.Shared.Contracts/Modules/ICommercialEntitlements.cs b/src/Shared/Sense.Shared.Contracts/Modules/ICommercialEntitlements.cs
 new file mode 100644
 index 00000000..1fc44d95
@@ -492,44 +513,26 @@ index 00000000..1fc44d95
 +{
 +    public int Limit { get; } = limit;
 +}
-diff --git a/web/src/components/commercial-license-banner.tsx b/web/src/components/commercial-license-banner.tsx
-new file mode 100644
-index 00000000..3a922d16
---- /dev/null
-+++ b/web/src/components/commercial-license-banner.tsx
-@@ -0,0 +1,32 @@
-+import { useEffect, useState } from "react";
-+import { Alert, Button, Group, Text } from "@mantine/core";
-+import { Timer } from "lucide-react";
-+import { apiClient } from "@senseik/api-client";
-+import { useAuthStore } from "@/store/auth.store";
-+
-+interface License { status: string; plan: string; employeeLimit: number; expiresAt: string }
-+
-+/** Sales context remains visible while the customer evaluates the actual HR product. */
-+export function CommercialLicenseBanner() {
-+  const [license, setLicense] = useState<License | null>(null);
-+  const token = useAuthStore((state) => state.token);
-+  useEffect(() => {
-+    if (!token) return;
-+    let cancelled = false;
-+    void apiClient.get<License | null>("/v1/identity/commercial/mine").then(({ data }) => {
-+      if (!cancelled) setLicense(data);
-+    }).catch(() => {});
-+    return () => { cancelled = true; };
-+  }, [token]);
-+  if (!license) return null;
-+  const days = Math.max(0, Math.ceil((Date.parse(license.expiresAt) - Date.now()) / 86400000));
-+  const salesUrl = import.meta.env.VITE_SALES_URL || "http://localhost:4173";
-+  return (
-+    <Alert color="violet" icon={<Timer size={18} />} mb="md" radius="md">
-+      <Group justify="space-between" wrap="wrap">
-+        <Text size="sm">{license.status === "trial" ? `SenseHR demo · ${days} gün kaldı` : "SenseHR lisansınız aktif"} · {license.employeeLimit} çalışan kapasitesi</Text>
-+        <Button component="a" href={`${salesUrl}/giris`} size="xs" variant="light">Paket & lisans</Button>
-+      </Group>
-+    </Alert>
-+  );
-+}
+diff --git a/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs b/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs
+index 452d340b..582e36da 100644
+--- a/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs
++++ b/src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs
+@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics;
+ using Microsoft.AspNetCore.Mvc;
+ using Microsoft.Extensions.Options;
+ using Sense.Shared.Contracts.Configuration;
++using Sense.Shared.Contracts.Modules;
+ using Sense.Shared.Infrastructure.Persistence;
+ using Sense.Shared.Kernel.Results;
+ using Sense.Shared.Web.Controllers;
+@@ -66,6 +67,7 @@ public sealed partial class GlobalExceptionHandler(
+     {
+         ValidationException v => (ErrorType.Validation, ErrorCodes.ValidationError, ToErrorDictionary(v), StatusCodes.Status400BadRequest),
+         TenantMismatchException => (ErrorType.Forbidden, ErrorCodes.TenantMismatch, null, StatusCodes.Status403Forbidden),
++        CommercialCapacityExceededException => (ErrorType.Rule, "commercial.employee_capacity_exceeded", null, StatusCodes.Status409Conflict),
+         UnauthorizedAccessException => (ErrorType.Unauthorized, ErrorCodes.Unauthenticated, null, StatusCodes.Status401Unauthorized),
+         OperationCanceledException => (ErrorType.Failure, ErrorCodes.RequestCancelled, null, ClientClosedRequest),
+         Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => (ErrorType.Conflict, ErrorCodes.ConcurrencyConflict, null, StatusCodes.Status409Conflict),
 diff --git a/tests/Modules/Sense.Modules.Identity.Tests/Tenants/CommercialLicenseTests.cs b/tests/Modules/Sense.Modules.Identity.Tests/Tenants/CommercialLicenseTests.cs
 new file mode 100644
 index 00000000..69b052be
@@ -604,3 +607,189 @@ index 00000000..69b052be
 +        Assert.True(validator.Validate(License()).IsValid);
 +    }
 +}
+diff --git a/tests/Modules/Sense.Modules.Identity.Tests/Tenants/ModuleSettingsUseCasesTests.cs b/tests/Modules/Sense.Modules.Identity.Tests/Tenants/ModuleSettingsUseCasesTests.cs
+index c7cbd0fd..60c5564d 100644
+--- a/tests/Modules/Sense.Modules.Identity.Tests/Tenants/ModuleSettingsUseCasesTests.cs
++++ b/tests/Modules/Sense.Modules.Identity.Tests/Tenants/ModuleSettingsUseCasesTests.cs
+@@ -92,6 +92,28 @@ public sealed class ModuleSettingsUseCasesTests
+ 
+     // --- Handlers ---
+ 
++    [Fact]
++    public async Task CommercialSettings_ReflectLicenseAndRejectUnlicensedEnable()
++    {
++        var tenant = NewTenant("licensed-demo");
++        tenant.UpdateSettings(new CommercialLicense("trial", "growth", ["employee", "leave", "expense"],
++            10, DateTime.UtcNow.AddDays(14), "test-lead").WriteTo(tenant.SettingsJson));
++        var (tenants, context) = RepoFor(tenant);
++        var cache = Substitute.For<IModuleSettingsCacheInvalidator>();
++        var read = await new GetModuleSettingsHandler(tenants, context).Handle(new GetModuleSettingsQuery(), CancellationToken.None);
++        read.Value.Modules.Single(m => m.Key == "leave").Enabled.ShouldBeTrue();
++        read.Value.Modules.Single(m => m.Key == "assets").Enabled.ShouldBeFalse();
++        read.Value.Modules.Single(m => m.Key == "assets").IsLicensed.ShouldBeFalse();
++        var update = new UpdateModuleSettingsHandler(tenants, context, cache);
++        var denied = await update.Handle(new UpdateModuleSettingsCommand([]), CancellationToken.None);
++        denied.IsFailure.ShouldBeTrue();
++        denied.Error.Code.ShouldBe("commercial.module.not_licensed");
++        tenant.ModuleSettings.DisabledModules.ShouldBeEmpty();
++        (await update.Handle(new UpdateModuleSettingsCommand(read.Value.DisabledModules.Concat(["leave"]).ToArray()), CancellationToken.None)).IsSuccess.ShouldBeTrue();
++        tenant.ModuleSettings.IsDisabled("leave").ShouldBeTrue();
++        tenant.ModuleSettings.DisabledModules.ShouldBe(["leave"]);
++    }
++
+     [Fact]
+     public async Task Get_ReturnsWholeCatalog_AllEnabled_ForFreshTenant()
+     {
+diff --git a/web/Dockerfile b/web/Dockerfile
+index 9a3dee0f..80912c06 100644
+--- a/web/Dockerfile
++++ b/web/Dockerfile
+@@ -21,7 +21,7 @@ COPY packages/api-client/package.json packages/api-client/package.json
+ COPY apps/senseik-mobile/package.json apps/senseik-mobile/package.json
+ 
+ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+-    pnpm install --frozen-lockfile --filter web...
++    pnpm install --frozen-lockfile --ignore-scripts --filter web...
+ 
+ COPY web/ web/
+ COPY packages/api-client/ packages/api-client/
+@@ -36,6 +36,8 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ # The login page's "Demo kullanıcıları" hint is hidden in production builds unless this is "true" (D-6).
+ ARG VITE_SHOW_DEMO_CREDENTIALS=false
+ ENV VITE_SHOW_DEMO_CREDENTIALS=$VITE_SHOW_DEMO_CREDENTIALS
++ARG VITE_SALES_URL=http://localhost:4173
++ENV VITE_SALES_URL=$VITE_SALES_URL
+ 
+ RUN pnpm --filter web build
+ 
+diff --git a/web/src/components/commercial-license-banner.tsx b/web/src/components/commercial-license-banner.tsx
+new file mode 100644
+index 00000000..534501c8
+--- /dev/null
++++ b/web/src/components/commercial-license-banner.tsx
+@@ -0,0 +1,33 @@
++import { useEffect, useState } from "react";
++import { Alert, Button, Group, Text } from "@mantine/core";
++import { Timer } from "lucide-react";
++import { apiClient } from "@senseik/api-client";
++import { useAuthStore } from "@/store/auth.store";
++
++interface LicenseResponse { status: string; plan: string; employeeLimit: number; expiresAt: string }
++interface License extends LicenseResponse { observedAt: number }
++
++/** Sales context remains visible while the customer evaluates the actual HR product. */
++export function CommercialLicenseBanner() {
++  const [license, setLicense] = useState<License | null>(null);
++  const token = useAuthStore((state) => state.token);
++  useEffect(() => {
++    if (!token) return;
++    let cancelled = false;
++    void apiClient.get<LicenseResponse | null>("/v1/identity/commercial/mine").then(({ data }) => {
++      if (!cancelled) setLicense(data ? { ...data, observedAt: Date.now() } : null);
++    }).catch(() => {});
++    return () => { cancelled = true; };
++  }, [token]);
++  if (!license) return null;
++  const days = Math.max(0, Math.ceil((Date.parse(license.expiresAt) - license.observedAt) / 86400000));
++  const salesUrl = import.meta.env.VITE_SALES_URL || "http://localhost:4173";
++  return (
++    <Alert color="violet" icon={<Timer size={18} />} mb="md" radius="md">
++      <Group justify="space-between" wrap="wrap">
++        <Text size="sm">{license.status === "trial" ? `SenseHR demo · ${days} gün kaldı` : "SenseHR lisansınız aktif"} · {license.employeeLimit} çalışan kapasitesi</Text>
++        <Button component="a" href={`${salesUrl}/giris`} size="xs" variant="light">Paket & lisans</Button>
++      </Group>
++    </Alert>
++  );
++}
+diff --git a/web/src/components/setup/modules-users-step.tsx b/web/src/components/setup/modules-users-step.tsx
+index a25a38b3..0e04ef10 100644
+--- a/web/src/components/setup/modules-users-step.tsx
++++ b/web/src/components/setup/modules-users-step.tsx
+@@ -61,7 +61,7 @@ function ModulesUsersForm({
+   const [inviteError, setInviteError] = useState<string | null>(null);
+   const [finishError, setFinishError] = useState<string | null>(null);
+ 
+-  const optionalModules = modules.modules.filter((module) => !module.isCore);
++  const optionalModules = modules.modules.filter((module) => !module.isCore && module.isLicensed !== false);
+   const modulesChanged = [...disabled].sort().join() !== [...modules.disabledModules].sort().join();
+ 
+   const inviteMutation = useMutation({
+diff --git a/web/src/layouts/app-layout.tsx b/web/src/layouts/app-layout.tsx
+index 10a9c23b..6438d593 100644
+--- a/web/src/layouts/app-layout.tsx
++++ b/web/src/layouts/app-layout.tsx
+@@ -35,6 +35,7 @@ import { APP_LAUNCHER_ITEMS, NAV_ITEMS, navIconColor } from "@/config/navigation
+ import { NotificationsMenu } from "@/components/notifications/notification-bell";
+ import RouteBoundary from "@/components/route-boundary";
+ import SetupGuard from "@/components/setup-guard";
++import { CommercialLicenseBanner } from "@/components/commercial-license-banner";
+ import SettingsSubNav from "@/components/settings-subnav";
+ import ScreenSearch from "@/components/screen-search";
+ import ModuleRouteGuard from "@/components/module-disabled";
+@@ -430,6 +431,7 @@ export default function AppLayout() {
+               {/* Keeps the sidebar and header on screen while the next page's chunk loads. */}
+               <RouteBoundary>
+                 <ModuleRouteGuard>
++                  <CommercialLicenseBanner />
+                   <SetupGuard />
+                 </ModuleRouteGuard>
+               </RouteBoundary>
+diff --git a/web/src/pages/settings/modules.tsx b/web/src/pages/settings/modules.tsx
+index 76e110e3..259bcd56 100644
+--- a/web/src/pages/settings/modules.tsx
++++ b/web/src/pages/settings/modules.tsx
+@@ -145,7 +145,7 @@ function ModuleSettingsForm() {
+                       aria-label={name(module.key)}
+                       checked={!disabledSet.has(module.key)}
+                       onChange={(e) => onToggle(module, e.currentTarget.checked)}
+-                      disabled={!canManage || saveMutation.isPending}
++                      disabled={!canManage || module.isLicensed === false || saveMutation.isPending}
+                     />
+                   </Group>
+                 </div>
+diff --git a/web/src/pages/setup/setup-wizard.test.tsx b/web/src/pages/setup/setup-wizard.test.tsx
+index 9327c1eb..f375e941 100644
+--- a/web/src/pages/setup/setup-wizard.test.tsx
++++ b/web/src/pages/setup/setup-wizard.test.tsx
+@@ -409,6 +409,28 @@ describe("SetupWizardPage", () => {
+     expect(createUnit).not.toHaveBeenCalled();
+   });
+ 
++  it("only offers licensed modules and completes a sales demo without enabling excluded modules", async () => {
++    vi.mocked(getModuleSettings).mockResolvedValue({
++      modules: [
++        { key: "employee", isCore: true, enabled: true, isLicensed: true },
++        { key: "leave", isCore: false, enabled: true, isLicensed: true },
++        { key: "payroll", isCore: false, enabled: false, isLicensed: false },
++      ],
++      disabledModules: ["payroll"],
++    });
++    const user = userEvent.setup();
++    renderWizard();
++    await completeCompanyStep(user);
++    await user.click(await screen.findByRole("button", { name: trSetup.actions.skip }));
++    await user.click(await screen.findByRole("button", { name: trSetup.actions.skip }));
++    expect(await screen.findByRole("switch", { name: "İzin" })).toBeChecked();
++    expect(screen.queryByRole("switch", { name: "Bordro" })).not.toBeInTheDocument();
++    await user.click(screen.getByRole("button", { name: trSetup.actions.finish }));
++    expect(await screen.findByText("Home page")).toBeInTheDocument();
++    expect(updateModuleSettings).not.toHaveBeenCalled();
++    expect(completeTenantSetup).toHaveBeenCalledTimes(1);
++  });
++
+   it("refuses an invitation without a role and never calls the API", async () => {
+     const user = userEvent.setup();
+     renderWizard();
+diff --git a/web/src/types/index.ts b/web/src/types/index.ts
+index f8e81771..25cb4415 100644
+--- a/web/src/types/index.ts
++++ b/web/src/types/index.ts
+@@ -135,6 +135,8 @@ export interface ModuleSettingItem {
+   key: string;
+   isCore: boolean;
+   enabled: boolean;
++  /** False for a sales-managed module outside the purchased/demo allowlist. */
++  isLicensed?: boolean;
+ }
+ 
+ /** Mirrors `ModuleSettingsDto` (Identity): whole catalog + the tenant's disabled keys (the PUT body shape). */

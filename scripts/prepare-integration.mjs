@@ -3,7 +3,16 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 const root = resolve('../senseik');
+const base = '52127cd1d04e08ca134606da35d210aa5ec3869b';
 const modified = [
+  'src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/ModuleSettingsUseCases.cs',
+  'tests/Modules/Sense.Modules.Identity.Tests/Tenants/ModuleSettingsUseCasesTests.cs',
+  'web/src/types/index.ts',
+  'web/src/components/setup/modules-users-step.tsx',
+  'web/src/pages/setup/setup-wizard.test.tsx',
+  'web/src/pages/settings/modules.tsx',
+  'web/Dockerfile',
+  'src/Sense.Worker/Dockerfile',
   'src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs',
   'src/Modules/Identity/Sense.Modules.Identity.Application/Auth/Login.cs',
   'src/Modules/Identity/Sense.Modules.Identity.Application/Auth/RefreshAndLogout.cs',
@@ -25,10 +34,18 @@ const added = [
   'web/src/components/commercial-license-banner.tsx',
   'tests/Modules/Sense.Modules.Identity.Tests/Tenants/CommercialLicenseTests.cs',
 ];
-let patch = execFileSync('git', ['-C', root, 'diff', '--binary', '--', ...modified], {
-  encoding: 'utf8',
-});
+let patch = execFileSync(
+  'git',
+  ['-C', root, 'diff', '--binary', base, '--', ...modified, ...added],
+  {
+    encoding: 'utf8',
+  },
+);
 for (const path of added) {
+  const tracked = execFileSync('git', ['-C', root, 'ls-files', '--', path], {
+    encoding: 'utf8',
+  }).trim();
+  if (tracked) continue;
   try {
     patch += execFileSync('git', ['diff', '--no-index', '--', '/dev/null', path], {
       cwd: root,
@@ -45,7 +62,7 @@ writeFileSync(
   'integrations/sensehr/manifest.json',
   JSON.stringify(
     {
-      base: execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      base,
       files: [...modified, ...added],
     },
     null,

@@ -1,0 +1,134 @@
+name: hrsales
+
+x-product-env: &product-env
+  ConnectionStrings__Database: Host=postgres;Port=5432;Database=sensehr;Username=sense;Password=${POSTGRES_PASSWORD:?Run node scripts/setup-docker.mjs first}
+  ConnectionStrings__Redis: redis:6379,abortConnect=false
+  Storage__Provider: MinIO
+  MinIO__Endpoint: minio:9000
+  MinIO__PublicEndpoint: localhost:19010
+  MinIO__AccessKey: senseik
+  MinIO__SecretKey: ${MINIO_PASSWORD:?Run setup-docker}
+  MinIO__UseHttps: "false"
+  Email__Smtp__Host: mailpit
+  Email__Smtp__Port: "1025"
+  Frontend__BaseUrl: http://localhost:13010
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: sensehr
+      POSTGRES_USER: sense
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: ["product-db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sense -d sensehr"]
+      interval: 5s
+      timeout: 3s
+      retries: 25
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: senseik
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+    volumes: ["product-files:/data"]
+    ports: ["127.0.0.1:19010:9000", "127.0.0.1:19011:9001"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 25
+  minio-init:
+    image: quay.io/minio/mc:latest
+    environment:
+      MINIO_PASSWORD: ${MINIO_PASSWORD}
+    depends_on:
+      minio: {condition: service_healthy}
+    entrypoint: ["/bin/sh", "-c"]
+    command: ['mc alias set local http://minio:9000 senseik "$$MINIO_PASSWORD" && mc mb --ignore-existing local/senseik-files && mc mb --ignore-existing local/senseik-public && mc anonymous set download local/senseik-public']
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["127.0.0.1:18026:8025"]
+    volumes: ["local-mail:/data"]
+    environment:
+      MP_DATABASE: /data/mailpit.db
+  migrate:
+    build:
+      context: ${SENSEHR_ROOT:-../senseik}
+      dockerfile: ${MIGRATOR_DOCKERFILE:?Run setup-docker}
+    environment:
+      <<: *product-env
+      DOTNET_ENVIRONMENT: Development
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    build:
+      context: ${SENSEHR_ROOT:-../senseik}
+      dockerfile: src/Sense.Api/Dockerfile
+    environment:
+      <<: *product-env
+      ASPNETCORE_ENVIRONMENT: Development
+      Seeding__Enabled: "true"
+      Seeding__Profile: Demo
+      Platform__SuperAdmin__Email: ${PLATFORM_EMAIL}
+      Platform__SuperAdmin__Password: ${PLATFORM_PASSWORD}
+      Attendance__Terminals__CredentialPepper: ${CREDENTIAL_PEPPER}
+    ports: ["127.0.0.1:18081:8080"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+      minio-init: {condition: service_completed_successfully}
+  worker:
+    build:
+      context: ${SENSEHR_ROOT:-../senseik}
+      dockerfile: src/Sense.Worker/Dockerfile
+    environment:
+      <<: *product-env
+      DOTNET_ENVIRONMENT: Development
+    depends_on:
+      api: {condition: service_healthy}
+  web:
+    build:
+      context: ${SENSEHR_ROOT:-../senseik}
+      dockerfile: web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_SHOW_DEMO_CREDENTIALS: "true"
+        VITE_SALES_URL: http://localhost:4173
+    ports: ["127.0.0.1:13010:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+  sales:
+    build: .
+    environment:
+      NODE_ENV: development
+      PUBLIC_URL: http://localhost:4173
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+      ADMIN_NOTIFICATION_EMAIL: ${ADMIN_EMAIL}
+      PRODUCT_MODE: sensehr
+      SENSEHR_API_URL: http://api:8080/api
+      SENSEHR_WEB_URL: http://localhost:13010
+      SENSEHR_PLATFORM_EMAIL: ${PLATFORM_EMAIL}
+      SENSEHR_PLATFORM_PASSWORD: ${PLATFORM_PASSWORD}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      DATABASE_PATH: /app/data/sales.sqlite
+    ports: ["127.0.0.1:4173:4173"]
+    volumes: ["./data:/app/data"]
+    depends_on:
+      api: {condition: service_healthy}
+      mailpit: {condition: service_started}
+volumes:
+  product-db:
+  product-files:
+  local-mail:

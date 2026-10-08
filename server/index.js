@@ -24,7 +24,7 @@ if (!config.adminHash && !production) {
 const store = createStore(process.env.DATABASE_PATH);
 const app = createApp(store, config);
 const server = createServer(app);
-if (production) {
+if (production || process.env.SERVE_DIST === 'true') {
   if (!existsSync('dist/index.html')) throw new Error('Önce npm run build çalıştırın.');
   app.use(express.static(resolve('dist'), { index: false, maxAge: '1h' }));
   app.get('/{*path}', (_req, res) => res.sendFile(resolve('dist/index.html')));

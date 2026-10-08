@@ -48,7 +48,7 @@ Demo kapsamı ilgilenilen paket ile sınırlı olmak zorunda değildir: satış 
 
 ## Canlı kullanıma hazırlık
 
-SMTP ve gönderen alan adı doğrulaması, gerçek yönetici bildirim adresi, nihai paket fiyatları ve vergileri, kurumca onaylanmış aydınlatma metni, canlı alan adı/HTTPS ve SenseHR servis hesabı gerekir. Mevcut ürünün veritabanı/servisleriyle uçtan uca gerçek tenant açılışı ayrıca doğrulanmalıdır.
+SMTP ve gönderen alan adı doğrulaması, gerçek yönetici bildirim adresi, nihai paket fiyatları ve vergileri, kurumca onaylanmış aydınlatma metni, canlı alan adı/HTTPS ve SenseHR servis hesabı gerekir. Yerel Docker ortamında gerçek tenant açılışı, ürün girişi, kapsam/iptal ve PostgreSQL kapasite kontrolü doğrulandı. Canlı müşteri senaryosu ve dış SMTP teslimatı ayrıca değerlendirilmelidir.
 
 Sonraki ticari geliştirmeler: ödeme sağlayıcısı ile doğrulanmış webhook tabanlı otomatik aktivasyon, müşterinin teklifi kabul/ret akışı, e-fatura entegrasyonu, yenileme hatırlatmaları, satış sorumlusu atama ve UTM/funnel ölçümü. Şu an kredi kartı tahsilatı yerine yönetici teyitli ödeme akışı uygulanır.
 
