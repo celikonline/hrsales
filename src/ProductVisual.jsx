@@ -5,7 +5,7 @@ import './product-visual.css';
 const screens = {
   payroll: {
     title: 'Bordro ve ücret',
-    alt: 'SenseHR gerçek bordro dönemleri ekranı; demo ortamında dönem henüz açılmamış',
+    alt: 'SenseHR Eylül 2026 bordro dönem detayı: ödeme durumu, prim ve komisyon kayıtları; kurgusal demo veriler',
   },
   overview: {
     title: 'İK genel bakış',
@@ -30,7 +30,7 @@ export function ProductPreview({ selected = 'overview', large = false }) {
   const screen = screens[key];
   const [open, setOpen] = useState(false);
   const dialog = useRef(null);
-  const image = `/images/product/web-${key}.jpg`;
+  const image = `/images/product/web-${key}.jpg?v=20261008-docker`;
   useEffect(() => {
     if (open && !dialog.current.open) dialog.current.showModal();
     else if (!open && dialog.current.open) dialog.current.close();

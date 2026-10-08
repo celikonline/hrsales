@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-08",
+  "source": "http://localhost:13010",
+  "runtime": "hrsales Docker Compose, rebuilt from local senseik working tree",
+  "source_commit": "0eda53d5",
+  "data": "Demo HR Company, fictional seeded records",
+  "method": "Browser screenshot, JPEG encoding only; no UI alterations",
+  "payroll": "10 seeded periods for 2026; 55 calculated payslips per period",
+  "captures": [
+    {
+      "key": "overview",
+      "file": "public/images/product/web-overview.jpg",
+      "route": "/app",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "sha256": "9b08dc8e8c489342310cff822b3a6dda37b3f5098bef604b0e1059b909560a10"
+    },
+    {
+      "key": "employee",
+      "file": "public/images/product/web-employee.jpg",
+      "route": "/app/employees",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "sha256": "5b401007640229cef9eb1cd40d6250af6ae4bf76adeb0c437268900b378ed03e"
+    },
+    {
+      "key": "leave",
+      "file": "public/images/product/web-leave.jpg",
+      "route": "/app/leave/calendar",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "sha256": "27c8c6e5ae61a295f28bb1c78b0e85d86900bb415f750c8890f73db9a3a0c921"
+    },
+    {
+      "key": "payroll",
+      "file": "public/images/product/web-payroll.jpg",
+      "route": "/app/payroll/periods/8ff8e119-3082-4a71-b1a7-0529de3d2e40",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "sha256": "b233de9f9a50ddd98842d24e85a5b6efb2bc4cf242a9d2a4400f29f0772074a7"
+    },
+    {
+      "key": "reporting",
+      "file": "public/images/product/web-reporting.jpg",
+      "route": "/app/reports (İK göstergeleri sekmesi)",
+      "dimensions": [
+        1280,
+        720
+      ],
+      "sha256": "07bf10a7047be1131b10a179f0cbc3a06a5b31f622679da94ae3a6d5547f27d8"
+    }
+  ],
+  "mobile": "Existing native captures from 2026-10-05 retained; not recaptured"
+}

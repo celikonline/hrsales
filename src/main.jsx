@@ -129,6 +129,7 @@ import {
 } from './discover.jsx';
 import { MobileShowcase } from './MobileShowcase.jsx';
 import { ProductPreview } from './ProductVisual.jsx';
+import { HeroProductSlider } from './HeroProductSlider.jsx';
 import { ProductStory } from './ProductStory.jsx';
 import { PresentationRequest } from './PresentationRequest.jsx';
 import { ReferenceBrands } from './ReferenceBrands.jsx';
@@ -483,40 +484,7 @@ function Landing({ catalog }) {
               </span>
             </div>
           </div>
-          <div className="hero-topic-links">
-            <a href="#urun-payroll">
-              <Icon name="ReceiptText" size={18} /> Bordro & ücret
-            </a>
-            <a href="#urun-leave">
-              <Icon name="CalendarDays" size={18} /> İzin & onay
-            </a>
-            <a href="#mobil-deneyim">
-              <Icon name="MonitorSmartphone" size={18} /> Mobil deneyim
-            </a>
-          </div>
-          <div className="hero-product">
-            <div className="floating-badge">
-              <span className="mint">
-                <Icon name="CircleCheck" size={22} />
-              </span>
-              <div>
-                <b>Bir talep daha tamam.</b>
-                <small>Daha az takip, daha çok zaman.</small>
-              </div>
-            </div>
-            <ProductPreview />
-            <img
-              className="hero-device-phone"
-              src="/images/product/mobile-home.jpg"
-              alt="SenseHR gerçek mobil ana ekranı · Demo veriler"
-              width="540"
-              height="1170"
-              decoding="async"
-            />
-            <div className="product-caption">
-              <span className="tiny-dot" /> SenseHR gerçek web ve mobil ekranları · Demo veriler
-            </div>
-          </div>
+          <HeroProductSlider />
         </section>
         <ReferenceBrands />
         <section className="benefits-strip container">
