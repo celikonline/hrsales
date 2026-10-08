@@ -1,0 +1,23 @@
+{
+  "base": "52127cd1d04e08ca134606da35d210aa5ec3869b",
+  "files": [
+    "src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CreateTenant.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Application/Auth/Login.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Application/Auth/RefreshAndLogout.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Application/Auth/GetMe.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/ModuleAccessService.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Api/IdentityModule.cs",
+    "src/Modules/Employee/Sense.Modules.Employee.Infrastructure/Persistence/EmployeeDbContext.cs",
+    "src/Shared/Sense.Shared.Web/ErrorHandling/GlobalExceptionHandler.cs",
+    "src/Sense.Api/Program.cs",
+    "web/src/layouts/app-layout.tsx",
+    "src/Modules/Identity/Sense.Modules.Identity.Domain/Tenants/CommercialLicense.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Application/Tenants/CommercialLicensing.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Api/Controllers/CommercialController.cs",
+    "src/Modules/Identity/Sense.Modules.Identity.Infrastructure/Security/CommercialEntitlements.cs",
+    "src/Sense.Api/Middleware/CommercialLicenseMiddleware.cs",
+    "src/Shared/Sense.Shared.Contracts/Modules/ICommercialEntitlements.cs",
+    "web/src/components/commercial-license-banner.tsx",
+    "tests/Modules/Sense.Modules.Identity.Tests/Tenants/CommercialLicenseTests.cs"
+  ]
+}
