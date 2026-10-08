@@ -2,6 +2,77 @@
   min-width: 0;
   padding-bottom: 8px;
 }
+.hero.hero-showcase {
+  width: calc(100% - 32px);
+  max-width: 1600px;
+  padding: 28px 20px 10px;
+}
+.hero-showcase .hero-product {
+  width: 100%;
+  max-width: none;
+}
+.hero-showcase .hero-slide-tabs {
+  margin: 0 0 20px;
+}
+.hero-showcase .hero-device-phone {
+  width: clamp(130px, 13vw, 200px);
+  right: 12px;
+}
+.hero-demo-action {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.hero-demo-button {
+  position: relative;
+  display: inline-flex;
+  width: 270px;
+  height: 58px;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #386bff;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 650;
+  isolation: isolate;
+}
+.hero-demo-wipe {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: 48px;
+  border-radius: 999px;
+  background: #fff;
+  transition: width 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hero-demo-arrow {
+  position: absolute;
+  left: 19px;
+  z-index: 1;
+  color: #386bff;
+  transition: left 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.hero-demo-label {
+  position: relative;
+  z-index: 1;
+  margin-left: 64px;
+  white-space: nowrap;
+  transition:
+    transform 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 300ms ease;
+}
+.hero-demo-button:is(:hover, :focus-visible) .hero-demo-wipe {
+  width: calc(100% - 10px);
+}
+.hero-demo-button:is(:hover, :focus-visible) .hero-demo-arrow {
+  left: calc(100% - 36px);
+}
+.hero-demo-button:is(:hover, :focus-visible) .hero-demo-label {
+  color: #386bff;
+  transform: translateX(-40px);
+}
 .hero-slide-tabs {
   display: flex;
   justify-content: center;
@@ -74,6 +145,37 @@
   font-size: 13px;
 }
 @media (max-width: 760px) {
+  .hero.hero-showcase {
+    width: calc(100% - 16px);
+    padding: 22px 8px 8px;
+  }
+  .hero-showcase .hero-slide-tabs {
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .hero-showcase .hero-slide-tabs button {
+    padding: 9px;
+    font-size: 11px;
+    min-height: 44px;
+  }
+  .hero-showcase .hero-slide-tabs button svg {
+    width: 15px;
+    height: 15px;
+  }
+  .hero-showcase .hero-slide-controls {
+    gap: 8px;
+  }
+  .hero-showcase .hero-slide-status {
+    min-width: 0;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .hero-showcase .hero-slide-status span {
+    font-size: 11px;
+  }
+  .hero-showcase .product-caption {
+    font-size: 11px;
+  }
   .hero-slide-tabs {
     gap: 8px;
     margin-bottom: 20px;
@@ -93,6 +195,11 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .hero-demo-wipe,
+  .hero-demo-arrow,
+  .hero-demo-label {
+    transition: none;
+  }
   .hero-slide-tabs button {
     transition: none;
   }

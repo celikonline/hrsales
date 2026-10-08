@@ -3,13 +3,13 @@ import { ArrowUpRight, Check, CircleAlert, MailCheck } from 'lucide-react';
 import './quick-demo.css';
 import { WhatsAppLink } from './WhatsAppLink.jsx';
 
-export function QuickDemoForm({ catalog, modules = [], plan = 'growth', hero = false }) {
+export function QuickDemoForm({ catalog, modules = [], plan = 'growth', hero = false, initialEmail = '' }) {
   const id = useId();
   const inputRef = useRef(null);
   const phoneRef = useRef(null);
   const feedbackRef = useRef(null);
   const submitting = useRef(false);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState('');
   const [website, setWebsite] = useState('');
   const [busy, setBusy] = useState(false);

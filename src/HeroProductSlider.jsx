@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   ReceiptText,
@@ -7,6 +7,8 @@ import {
   ChartNoAxesCombined,
   ChevronLeft,
   ChevronRight,
+  Pause,
+  Play,
 } from "lucide-react";
 import { ProductPreview } from "./ProductVisual.jsx";
 import "./hero-product-slider.css";
@@ -39,15 +41,50 @@ const slides = [
   },
 ];
 
-export function HeroProductSlider() {
+export function HeroProductSlider({ referenceLayout = false }) {
   const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  const root = useRef(null);
   const slide = slides[active];
   const move = (step) =>
     setActive((current) => (current + step + slides.length) % slides.length);
 
+  useEffect(() => {
+    if (paused) return;
+    const timer = window.setInterval(() => {
+      if (document.hidden || root.current?.querySelector("dialog[open]"))
+        return;
+      setActive((current) => (current + 1) % slides.length);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [active, paused]);
+
+  const slideTabs = (
+    <div
+      className="hero-slide-tabs"
+      role="group"
+      aria-label="Ürün slaytını seçin"
+    >
+      {slides.map(({ key, title, icon: Icon }, index) => (
+        <button
+          type="button"
+          key={key}
+          aria-pressed={active === index}
+          aria-controls="hero-product-slide"
+          onClick={() => setActive(index)}
+        >
+          <Icon size={18} aria-hidden="true" /> {title}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div
       className="hero-product-slider"
+      ref={root}
       role="region"
       aria-roledescription="slayt gösterisi"
       aria-label="SenseHR ürün ekranları"
@@ -59,23 +96,7 @@ export function HeroProductSlider() {
         }
       }}
     >
-      <div
-        className="hero-slide-tabs"
-        role="group"
-        aria-label="Ürün slaytını seçin"
-      >
-        {slides.map(({ key, title, icon: Icon }, index) => (
-          <button
-            type="button"
-            key={key}
-            aria-pressed={active === index}
-            aria-controls="hero-product-slide"
-            onClick={() => setActive(index)}
-          >
-            <Icon size={18} aria-hidden="true" /> {title}
-          </button>
-        ))}
-      </div>
+      {!referenceLayout && slideTabs}
       <div
         className="hero-product"
         id="hero-product-slide"
@@ -83,16 +104,35 @@ export function HeroProductSlider() {
         aria-roledescription="slayt"
         aria-label={`${active + 1} / ${slides.length} · ${slide.title}`}
       >
-        <ProductPreview selected={slide.key} />
-        <img
-          className="hero-device-phone"
-          src={`/images/product/mobile-${slide.mobile}.jpg`}
-          alt={`SenseHR gerçek mobil ${slide.mobile === "leave" ? "izin talebi" : slide.mobile === "approvals" ? "onaylar" : "ana ekranı"} · Demo veriler`}
-          width="540"
-          height="1170"
-          decoding="async"
-        />
+        {referenceLayout ? (
+          <div className="hero-reference-browser">
+            <div className="hero-reference-browser-bar" aria-hidden="true">
+              <span className="hero-reference-browser-dots">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="hero-reference-browser-address">
+                SenseHR çalışma alanı
+              </span>
+            </div>
+            <ProductPreview selected={slide.key} />
+          </div>
+        ) : (
+          <>
+            <ProductPreview selected={slide.key} />
+            <img
+              className="hero-device-phone"
+              src={`/images/product/mobile-${slide.mobile}.jpg`}
+              alt={`SenseHR gerçek mobil ${slide.mobile === "leave" ? "izin talebi" : slide.mobile === "approvals" ? "onaylar" : "ana ekranı"} · Demo veriler`}
+              width="540"
+              height="1170"
+              decoding="async"
+            />
+          </>
+        )}
       </div>
+      {referenceLayout && slideTabs}
       <div className="hero-slide-controls">
         <button
           type="button"
@@ -104,7 +144,7 @@ export function HeroProductSlider() {
         </button>
         <div
           className="hero-slide-status"
-          aria-live="polite"
+          aria-live={paused ? "polite" : "off"}
           aria-atomic="true"
         >
           <strong>{slide.title}</strong>
@@ -119,6 +159,20 @@ export function HeroProductSlider() {
           onClick={() => move(1)}
         >
           <ChevronRight size={21} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="hero-slide-arrow hero-slide-playback"
+          aria-label={
+            paused ? "Slaytları otomatik oynat" : "Slaytları duraklat"
+          }
+          onClick={() => setPaused((current) => !current)}
+        >
+          {paused ? (
+            <Play size={18} aria-hidden="true" />
+          ) : (
+            <Pause size={18} aria-hidden="true" />
+          )}
         </button>
       </div>
       <div className="product-caption">

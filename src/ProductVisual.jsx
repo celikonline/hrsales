@@ -1,43 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Expand, X, ArrowUpRight } from 'lucide-react';
-import './product-visual.css';
+import React, { useEffect, useRef, useState } from "react";
+import { Expand, X, ArrowUpRight } from "lucide-react";
+import {
+  productScreens as screens,
+  galleryScreenKeys,
+  moduleScreenKeys,
+} from "../shared/product-screens.js";
+import "./product-visual.css";
 
-const screens = {
-  payroll: {
-    title: 'Bordro ve ücret',
-    alt: 'SenseHR Eylül 2026 bordro dönem detayı: ödeme durumu, prim ve komisyon kayıtları; kurgusal demo veriler',
-  },
-  overview: {
-    title: 'İK genel bakış',
-    alt: 'SenseHR gerçek web ana ekranı: çalışan bilgisi, izin bakiyesi ve ekip göstergeleri; demo veriler',
-  },
-  employee: {
-    title: 'Çalışanlar',
-    alt: 'SenseHR gerçek çalışan listesi: departman, unvan, yönetici ve kayıt durumu; demo veriler',
-  },
-  leave: {
-    title: 'İzin yönetimi',
-    alt: 'SenseHR gerçek izin takvimi: çalışanlar ve onaylanmış veya bekleyen izinler; demo veriler',
-  },
-  reporting: {
-    title: 'İK göstergeleri',
-    alt: 'SenseHR gerçek İK göstergeleri sayfası; demo şirket verileri',
-  },
-};
-
-export function ProductPreview({ selected = 'overview', large = false }) {
-  const key = screens[selected] ? selected : 'overview';
+export function ProductPreview({ selected = "overview", large = false }) {
+  const selectedKey = moduleScreenKeys[selected] || selected;
+  const key = screens[selectedKey] ? selectedKey : "overview";
   const screen = screens[key];
   const [open, setOpen] = useState(false);
   const dialog = useRef(null);
-  const image = `/images/product/web-${key}.jpg?v=20261008-docker`;
+  const image = `/images/product/web-${key}.jpg?v=20261008-seeded-v4`;
   useEffect(() => {
     if (open && !dialog.current.open) dialog.current.showModal();
     else if (!open && dialog.current.open) dialog.current.close();
   }, [open]);
   return (
     <>
-      <div className={`product-preview product-visual ${large ? 'large' : ''}`}>
+      <div className={`product-preview product-visual ${large ? "large" : ""}`}>
         <button
           className="product-visual-trigger"
           onClick={() => setOpen(true)}
@@ -49,7 +32,7 @@ export function ProductPreview({ selected = 'overview', large = false }) {
             width="1280"
             height="720"
             decoding="async"
-            loading={large ? 'lazy' : 'eager'}
+            loading={large ? "lazy" : "eager"}
           />
           <span className="product-visual-expand">
             <Expand size={16} /> Ekranı büyüt
@@ -80,7 +63,7 @@ export function ProductPreview({ selected = 'overview', large = false }) {
 }
 
 export function ProductGallery() {
-  const [selected, setSelected] = useState('leave');
+  const [selected, setSelected] = useState("leave");
   return (
     <section
       className="product-gallery section"
@@ -97,10 +80,18 @@ export function ProductGallery() {
           </h2>
           <p>Çalışan kaydından onaya, SenseHR ekranlarını keşfedin.</p>
         </div>
-        <div className="product-gallery-tabs" role="group" aria-label="Ürün ekranını seçin">
-          {Object.entries(screens).map(([key, screen]) => (
-            <button key={key} aria-pressed={selected === key} onClick={() => setSelected(key)}>
-              {screen.title}
+        <div
+          className="product-gallery-tabs"
+          role="group"
+          aria-label="Ürün ekranını seçin"
+        >
+          {galleryScreenKeys.map((key) => (
+            <button
+              key={key}
+              aria-pressed={selected === key}
+              onClick={() => setSelected(key)}
+            >
+              {screens[key].title}
             </button>
           ))}
         </div>

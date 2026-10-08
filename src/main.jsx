@@ -124,15 +124,12 @@ import {
   MegaNavigation,
   ResourcePage,
   MarketingPage,
-  DiscoverTeaser,
-  PlatformSections,
 } from './discover.jsx';
-import { MobileShowcase } from './MobileShowcase.jsx';
 import { ProductPreview } from './ProductVisual.jsx';
 import { HeroProductSlider } from './HeroProductSlider.jsx';
-import { ProductStory } from './ProductStory.jsx';
+import { HeroLeadIntro } from './HeroLeadIntro.jsx';
+import { HomeReferenceSections } from './HomeReferenceSections.jsx';
 import { PresentationRequest } from './PresentationRequest.jsx';
-import { ReferenceBrands } from './ReferenceBrands.jsx';
 import { WhatsAppLink } from './WhatsAppLink.jsx';
 import './typography.css';
 import { QuickDemoForm } from './QuickDemoForm.jsx';
@@ -435,256 +432,18 @@ function Plans({ catalog, purchase = false, onSelect }) {
   );
 }
 function Landing({ catalog }) {
-  const [allModules, setAllModules] = useState(false);
-  const priority = ['payroll', 'leave', 'employee', 'expense', 'attendance', 'performance'];
-  const orderedModules = [...catalog.modules].sort((a, b) => {
-    const rank = (key) => (priority.includes(key) ? priority.indexOf(key) : priority.length);
-    return rank(a.key) - rank(b.key);
-  });
-  const visibleModules = allModules ? orderedModules : orderedModules.slice(0, 6);
   return (
-    <>
+    <div className="home-reference-page">
       <Header catalog={catalog} />
       <main>
-        <section className="hero container">
-          <div className="hero-orb one" />
-          <div className="hero-orb two" />
-          <div className="hero-copy">
-            <span className="hero-badge">
-              <span className="live-dot" /> Daha sade bir İK, daha güçlü bir ekip
-            </span>
-            <h1>
-              Bordro ve izin, tek bir düzende.
-              <br />
-              <span>Ekibinize daha çok zaman.</span>
-            </h1>
-            <p>
-              Çalışan bilgilerini, izin planını ve bordro operasyonunu
-              <br className="desktop-break" /> SenseHR'da bir araya getirin. Web'de ve mobilde, aynı
-              akışta.
-            </p>
-            <QuickDemoForm catalog={catalog} modules={['employee', 'payroll', 'leave']} hero />
-            <div className="hero-actions">
-              <a href="/online-sunum-talep-et?modul=payroll&modul=leave" className="hero-secondary">
-                Online sunum talep et <Icon name="ArrowUpRight" size={17} />
-              </a>
-            </div>
-            <div className="hero-assurances">
-              <span>
-                <Icon name="Check" size={15} />
-                {catalog.trialDays} günlük onaylı demo
-              </span>
-              <span>
-                <Icon name="Check" size={15} />
-                Kredi kartı gerekmez
-              </span>
-              <span>
-                <Icon name="Check" size={15} />
-                İhtiyacınız kadar modül
-              </span>
-            </div>
-          </div>
-          <HeroProductSlider />
+        <section className="hero container hero-reference" aria-label="SenseHR ürününü keşfedin">
+          <HeroLeadIntro catalog={catalog} />
+          <HeroProductSlider referenceLayout />
         </section>
-        <ReferenceBrands />
-        <section className="benefits-strip container">
-          <div>
-            <Icon name="Layers3" />
-            <span>
-              Tüm İK süreçleri<strong>Tek bir platformda</strong>
-            </span>
-          </div>
-          <div>
-            <Icon name="SlidersHorizontal" />
-            <span>
-              Modüler yapı<strong>İhtiyacınıza göre şekillenir</strong>
-            </span>
-          </div>
-          <div>
-            <Icon name="MonitorSmartphone" />
-            <span>
-              Çalışan self servis<strong>Her yerden erişim</strong>
-            </span>
-          </div>
-          <div>
-            <Icon name="Handshake" />
-            <span>
-              Birlikte başlangıç<strong>Size özel demo deneyimi</strong>
-            </span>
-          </div>
-        </section>
-        <ProductStory />
-        <section className="section container" id="moduller">
-          <SectionTitle
-            eyebrow="EKİBİNİZ İÇİN, BİR ARADA"
-            title={
-              <>
-                İK'nın her adımı.
-                <br />
-                <span>Tek bir yerde.</span>
-              </>
-            }
-          >
-            Ayrı dosyalar, dağınık talepler ve bitmeyen takipler yerine,
-            <br className="desktop-break" /> birbiriyle bağlantılı, anlaşılır bir çalışma alanı.
-          </SectionTitle>
-          <div className="module-grid">
-            {visibleModules.map((m, i) => (
-              <a href={`/urunler/${m.key}`} className="module-card" key={m.key}>
-                <span className={`module-icon ${['lilac', 'mint', 'peach'][i % 3]}`}>
-                  <Icon name={m.icon} size={25} />
-                </span>
-                <h3>{m.name}</h3>
-                <p>{m.description}</p>
-                <span className="module-discover">
-                  Demoda keşfedin <Icon name="ArrowUpRight" size={16} />
-                </span>
-              </a>
-            ))}
-          </div>
-          <div className="center module-more">
-            <Button secondary onClick={() => setAllModules(!allModules)}>
-              {allModules ? 'Daha az göster' : 'Tüm modülleri keşfedin'}
-              <Icon name={allModules ? 'ChevronUp' : 'ArrowRight'} size={16} />
-            </Button>
-          </div>
-        </section>
-        <MobileShowcase />
-        <section className="section container" id="nasil-calisir">
-          <SectionTitle
-            eyebrow="TANIŞMAKTAN KULLANMAYA"
-            title={
-              <>
-                Başlamak <span>karmaşık değil.</span>
-              </>
-            }
-          >
-            Önce ihtiyacınızı anlayalım. Sonra size uygun çalışma alanını birlikte açalım.
-          </SectionTitle>
-          <div className="steps">
-            {[
-              [
-                '01',
-                'MousePointer2',
-                'Demo talep edin',
-                'Şirket e-postanızı ve telefonunuzu paylaşın; demo talebinizi gönderin.',
-              ],
-              [
-                '02',
-                'MailCheck',
-                'Davetinizi alın',
-                'Ekibimiz talebinizi onaylasın, giriş bağlantınız e-postanıza gelsin.',
-              ],
-              [
-                '03',
-                'Rocket',
-                'Deneyin, karar verin',
-                'Size açılan modülleri keşfedin; uygun paketle lisansa geçin.',
-              ],
-            ].map(([n, icon, title, text]) => (
-              <div key={n}>
-                <span className="step-number">{n}</span>
-                <Icon name={icon} size={26} />
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="pricing-section" id="paketler">
-          <div className="container">
-            <SectionTitle
-              eyebrow="İHTİYACINIZ KADAR İK"
-              title={
-                <>
-                  Bugünkü ekibinize uygun.
-                  <br />
-                  <span>Yarınki büyümenize hazır.</span>
-                </>
-              }
-            >
-              Çalışan kapasitenizi ve modüllerinizi birlikte belirleyin.
-              <br className="desktop-break" /> Demo sonrası size uygun paketle devam edin.
-            </SectionTitle>
-            <Plans catalog={catalog} />
-          </div>
-        </section>
-        <PlatformSections />
-        <DiscoverTeaser />
-        <section className="section container faq" id="sorular">
-          <SectionTitle
-            center={false}
-            eyebrow="AKLINIZDAKİ SORULAR"
-            title={
-              <>
-                Başlamadan önce
-                <br />
-                <span>bilmek isteyecekleriniz.</span>
-              </>
-            }
-          >
-            İhtiyacınıza uygun demo için buradayız.
-            <br />
-            <a className="text-link" href="/demo-talebi">
-              Birlikte konuşalım <Icon name="ArrowUpRight" size={16} />
-            </a>
-          </SectionTitle>
-          <div>
-            {[
-              [
-                'Demo hemen açılır mı?',
-                `Başvurunuz ekibimiz tarafından incelenir. Onaylandıktan sonra seçilen modüller için ${catalog.trialDays} günlük demo daveti e-postanıza gönderilir.`,
-              ],
-              [
-                'Demo için kredi kartı gerekli mi?',
-                'Hayır. Demo başvurusu için şirket ve iletişim bilgileriniz, çalışan sayınız ve modül tercihleriniz yeterlidir.',
-              ],
-              [
-                'Hangi modülleri seçebilirim?',
-                'Özlük temel çalışma alanıdır. İzin, masraf, PDKS, performans, işe alım ve diğer modülleri başvuruda seçebilirsiniz; ekibimiz demo kapsamını birlikte netleştirir.',
-              ],
-              [
-                'Demo bittikten sonra ne olur?',
-                'Demo erişimi süre sonunda kapanır. Teklifinizin ve ödemenizin teyidinden sonra paketiniz, çalışan kapasiteniz ve lisans döneminize göre erişim etkinleştirilir.',
-              ],
-              [
-                'SenseIK ve SenseHR arasındaki ilişki nedir?',
-                'SenseIK, İK ürünümüzün satış ve başvuru deneyimidir. SenseHR ise modülleri kullandığınız ürün çalışma alanıdır.',
-              ],
-            ].map(([q, a], i) => (
-              <details key={q} open={i === 0}>
-                <summary>
-                  {q}
-                  <Icon name="Plus" size={18} />
-                </summary>
-                <p>{a}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-        <section className="cta-section container">
-          <div>
-            <span className="eyebrow">EKİBİNİZİN BİR SONRAKİ ADIMI</span>
-            <h2>
-              İK'ya değil,
-              <br />
-              <span>insana zaman ayırın.</span>
-            </h2>
-            <p>Ekibinize uygun SenseIK deneyimini birlikte planlayalım.</p>
-          </div>
-          <div>
-            <DemoLink>Demo talep et</DemoLink>
-            <span>
-              <Icon name="Check" size={15} /> Kredi kartı gerekmez · Onaylı demo
-            </span>
-          </div>
-          <div className="cta-decoration" aria-hidden="true">
-            <Icon name="Sparkles" size={130} />
-          </div>
-        </section>
+        <HomeReferenceSections catalog={catalog} />
       </main>
       <Footer catalog={catalog} />
-    </>
+    </div>
   );
 }
 function Field({ label, error, ...props }) {
@@ -717,7 +476,7 @@ function DemoRequest({ catalog }) {
           <p>
             Şirket e-postanızı ve telefon numaranızı paylaşın. SenseHR'ı birlikte keşfetmek için sizinle iletişime geçelim.
           </p>
-          <QuickDemoForm catalog={catalog} modules={requestedModules} plan={plan} />
+          <QuickDemoForm catalog={catalog} modules={requestedModules} plan={plan} initialEmail={(params.get('eposta') || '').slice(0, 254)} />
           <a className="quick-request-support" href="/destek">
             Destek talebi için tıklayın <Icon name="ArrowRight" size={16} />
           </a>
