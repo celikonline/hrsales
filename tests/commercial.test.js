@@ -15,6 +15,17 @@ const input = {
   plan: 'growth',
   privacyAccepted: true,
 };
+
+test('WhatsApp bağlantısı ülke kodlu numarayı ve hazır demo mesajını kullanır', () => {
+  const config = readConfig({ WHATSAPP_PHONE: '+90 (555) 123 45 67' });
+  const url = new URL(config.whatsappUrl);
+  assert.equal(url.origin, 'https://wa.me');
+  assert.equal(url.pathname, '/905551234567');
+  assert.match(url.searchParams.get('text'), /demo/);
+  for (const phone of ['', '123', '05551234567', 'invalid']) {
+    assert.equal(readConfig({ WHATSAPP_PHONE: phone }).whatsappUrl, '');
+  }
+});
 async function setup(t, injected = {}) {
   const store = createStore(':memory:');
   const config = {
@@ -99,6 +110,131 @@ test('Aydınlatma, çalışan sayısı ve modül girdileri sunucuda doğrulanır
     assert.equal((await s.request('/demo-requests', { ...input, ...patch })).status, 400);
   assert.equal(s.store.leads().length, 0);
 });
+
+test('Online sunum talebi türü, bildirimi ve demo talebinden bağımsız kaydı korunur', async (t) => {
+  const s = await setup(t);
+  await s.request('/demo-requests', input);
+  const presentation = { ...input, requestType: 'presentation' };
+  assert.equal((await s.request('/demo-requests', presentation)).status, 202);
+  assert.equal(s.store.leads().length, 2);
+  const lead = s.store.leads().find((l) => l.requestType === 'presentation');
+  assert.equal(lead.status, 'pending');
+  assert.equal(lead.license, null);
+  const mail = s.store.db
+    .prepare('SELECT * FROM outbox WHERE subject=?')
+    .get('SenseIK online sunum talebinizi aldık');
+  assert.match(mail.body, /sunum.*planlamak/i);
+  assert.doesNotMatch(mail.body, /giriş bağlantınız/i);
+  assert.equal(s.store.db.prepare('SELECT count(*) AS n FROM links').get().n, 0);
+  await s.request('/demo-requests', presentation);
+  assert.equal(s.store.leads().length, 2);
+  assert.equal(s.store.db.prepare('SELECT count(*) AS n FROM outbox').get().n, 4);
+  const cookie = await s.admin();
+  const overview = await s.request('/admin/overview', undefined, cookie);
+  assert.equal(overview.data.leads.find((l) => l.id === lead.id).requestType, 'presentation');
+});
+
+test('Bilinmeyen talep türü ve eksik sunum bilgileri reddedilir', async (t) => {
+  const s = await setup(t);
+  for (const patch of [
+    { requestType: 'forged' },
+    { requestType: 'presentation', privacyAccepted: false },
+    { requestType: 'presentation', email: 'invalid' },
+  ]) {
+    assert.equal((await s.request('/demo-requests', { ...input, ...patch })).status, 400);
+  }
+  assert.equal(s.store.leads().length, 0);
+});
+
+test('Hızlı demo talebinde e-posta ve telefon kaydedilir; eksik şirket bilgileri uydurulmaz', async (t) => {
+  const s = await setup(t);
+  const quick = { email: 'Demo@Example.com', phone: input.phone, privacyAccepted: true };
+  assert.equal((await s.request('/demo-requests/quick', quick)).status, 202);
+  const lead = s.store.leads()[0];
+  assert.equal(lead.email, 'demo@example.com');
+  assert.equal(lead.fullName, '');
+  assert.equal(lead.company, '');
+  assert.equal(lead.phone, input.phone);
+  assert.equal(lead.employees, null);
+  assert.equal(lead.status, 'pending');
+  assert.ok(lead.privacyAcceptedAt);
+  assert.equal(s.store.db.prepare('SELECT count(*) AS n FROM outbox').get().n, 2);
+  assert.equal(s.store.db.prepare('SELECT count(*) AS n FROM links').get().n, 0);
+  await s.request('/demo-requests/quick', quick);
+  assert.equal(s.store.leads().length, 1);
+  assert.equal(s.store.db.prepare('SELECT count(*) AS n FROM outbox').get().n, 2);
+  const bodies = s.store.db.prepare('SELECT body FROM outbox').all();
+  assert.ok(bodies.every(({ body }) => !/undefined|null/.test(body)));
+  assert.ok(bodies.some(({ body }) => body.includes(input.phone)));
+  const cookie = await s.admin();
+  const overview = await s.request('/admin/overview', undefined, cookie);
+  assert.equal(overview.data.leads[0].phone, input.phone);
+});
+
+test('Hızlı demo talebinde telefon zorunludur ve geçersiz numaralar reddedilir', async (t) => {
+  const s = await setup(t);
+  const quick = { email: 'demo@example.com', phone: input.phone, privacyAccepted: true };
+  for (const patch of [
+    { phone: undefined },
+    { phone: '' },
+    { phone: 'abcde12345' },
+    { phone: '12345' },
+    { phone: '----------' },
+    { phone: '1234567890123456' },
+  ])
+    assert.equal((await s.request('/demo-requests/quick', { ...quick, ...patch })).status, 400);
+  assert.equal(s.store.leads().length, 0);
+});
+
+test('Hızlı demo talebinde e-posta, aydınlatma, spam ve kapsam doğrulanır', async (t) => {
+  const s = await setup(t);
+  const quick = { email: 'demo@example.com', phone: input.phone, privacyAccepted: true };
+  for (const patch of [
+    { email: 'invalid' },
+    { privacyAccepted: false },
+    { website: 'spam' },
+    { modules: ['forged-module'] },
+    { plan: 'forged-plan' },
+  ])
+    assert.equal((await s.request('/demo-requests/quick', { ...quick, ...patch })).status, 400);
+  assert.equal(
+    (await s.request('/demo-requests/quick', quick, null, 'https://attacker.example')).status,
+    403,
+  );
+  assert.equal(s.store.leads().length, 0);
+});
+
+test('Hızlı talep ancak gerçek şirket bilgileri tamamlanınca onaylanır', async (t) => {
+  const s = await setup(t);
+  await s.request('/demo-requests/quick', {
+    email: 'demo@example.com',
+    phone: input.phone,
+    privacyAccepted: true,
+    modules: ['payroll'],
+    plan: 'starter',
+  });
+  const lead = s.store.leads()[0];
+  assert.deepEqual(lead.modules, ['employee', 'payroll']);
+  assert.equal(lead.plan, 'starter');
+  const admin = await s.admin();
+  const approval = { days: 14, modules: lead.modules };
+  assert.equal((await s.request(`/admin/leads/${lead.id}/approve`, approval, admin)).status, 400);
+  assert.equal(s.store.lead(lead.id).status, 'pending');
+  assert.equal(s.store.db.prepare('SELECT count(*) AS n FROM links').get().n, 0);
+  const result = await s.request(
+    `/admin/leads/${lead.id}/approve`,
+    {
+      ...approval,
+      fullName: 'Demo Yetkili',
+      company: 'Demo Şirketi',
+      employees: 25,
+    },
+    admin,
+  );
+  assert.equal(result.status, 200);
+  assert.equal(s.store.lead(lead.id).company, 'Demo Şirketi');
+  assert.equal(s.store.lead(lead.id).license.employeeLimit, 25);
+});
 test('Yönetici uçları ve çapraz kaynak yazımı korunur', async (t) => {
   const s = await setup(t);
   assert.equal((await s.request('/admin/overview')).status, 401);
@@ -107,7 +243,12 @@ test('Yönetici uçları ve çapraz kaynak yazımı korunur', async (t) => {
     403,
   );
   assert.equal(
-    (await s.request('/admin/login', { email: s.config.adminEmail, password: 'wrong' })).status,
+    (
+      await s.request('/admin/login', {
+        email: s.config.adminEmail,
+        password: 'wrong',
+      })
+    ).status,
     401,
   );
   const cookie = await s.admin();

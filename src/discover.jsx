@@ -30,6 +30,8 @@ import {
   maturityQuestions,
 } from '../shared/content.js';
 import './discover.css';
+import { MobileShowcase } from './MobileShowcase.jsx';
+import { ProductGallery } from './ProductVisual.jsx';
 import { solutionGroups, solutions } from '../shared/solutions.js';
 const iconMap = { Clock3, Building2, ReceiptText, Wallet, CalendarDays, ChartNoAxesCombined };
 const Money = ({ value }) =>
@@ -1178,6 +1180,8 @@ export function MarketingPage({ path, catalog, ProductPreview, Plans }) {
             ))}
           </div>
         </section>
+        <ProductGallery />
+        <MobileShowcase />
       </>
     );
   if (path.startsWith('/urunler/'))
@@ -1545,7 +1549,7 @@ export function MarketingPage({ path, catalog, ProductPreview, Plans }) {
       [
         [
           'Demo nasıl açılır?',
-          `Çalışan sayısı ve modül tercihlerinizle başvurun. Yönetici incelemesinden sonra ${catalog.trialDays} günlük erişim daveti e-posta ile hazırlanır.`,
+          `Şirket e-postanız ve telefon numaranızla başvurun. Demo kapsamını birlikte belirleyelim; yönetici onayından sonra ${catalog.trialDays} günlük erişim daveti e-postanıza gönderilir.`,
         ],
         [
           'Kredi kartı gerekli mi?',
@@ -1617,6 +1621,7 @@ export function MarketingPage({ path, catalog, ProductPreview, Plans }) {
             SenseHR ürün girişi <ArrowUpRight size={17} />
           </a>
         </section>
+        {path === '/calisan-deneyimi' && <MobileShowcase />}
       </>
     );
   return <Missing />;

@@ -1,0 +1,295 @@
+/* Readable marketing copy, independent of the illustrative product previews. */
+:root {
+  --muted: #454e65;
+}
+body {
+  font-size: 17px;
+  font-weight: 450;
+}
+.nav,
+.nav nav,
+.mega-navigation {
+  gap: 14px;
+}
+.nav nav a,
+.mega-navigation > button {
+  font-size: 16px;
+  color: #343d54;
+}
+.button,
+.login-link,
+.plan .button,
+.hero-actions .button {
+  font-size: 16px;
+}
+.hero-copy > p {
+  font-size: 20px;
+  color: #f4f1ff;
+  line-height: 1.7;
+}
+.hero-actions .button {
+  background: #087f79;
+}
+.floating-badge b {
+  font-size: 14px;
+}
+.floating-badge small {
+  font-size: 12px;
+}
+.hero-badge,
+.topbar {
+  font-size: 14px;
+}
+.hero-assurances,
+.hero-secondary {
+  font-size: 15px;
+  color: #f0ecff;
+}
+.section-title p,
+.resource-hero p {
+  font-size: 20px;
+}
+.eyebrow {
+  font-size: 13px;
+}
+.module-card h3,
+.steps h3 {
+  font-size: 21px;
+}
+.module-card p,
+.plan p,
+.steps p,
+.benefit-card p,
+.faq details p,
+.report-card-body p,
+.blog-card p,
+.tool-card p,
+.request-aside > p {
+  font-size: 17px;
+}
+.module-discover,
+.text-link,
+.tool-card .text-link,
+.benefits-strip span,
+.feature-tabs small,
+.plan li,
+.plan-price > span,
+.pricing-controls label,
+.segmented button,
+.request-journey p,
+.request-assurance p,
+.form-intro {
+  font-size: 16px;
+}
+.benefits-strip span,
+.plan li,
+.plan-minimum,
+.pricing-note {
+  color: var(--muted);
+}
+.benefits-strip strong,
+.feature-tabs b,
+.faq summary,
+.request-journey h3 {
+  font-size: 17px;
+}
+.plan-minimum,
+.pricing-note,
+.form-progress,
+.form-progress b,
+.form-footnote,
+.back-link {
+  font-size: 14px;
+}
+.plan-ribbon {
+  font-size: 13px;
+}
+.field > span,
+.field input,
+.field select,
+.field textarea {
+  font-size: 17px;
+}
+.field input::placeholder,
+.field textarea::placeholder {
+  color: #687086;
+}
+.field > span > small {
+  color: var(--muted);
+}
+.footer-main h4 {
+  font-size: 17px;
+}
+.footer-main > div > a:not(.logo),
+.footer-main p {
+  font-size: 16px;
+  color: #c8c8df;
+}
+.footer-bottom,
+.made-by {
+  font-size: 14px;
+  color: #b7b7ce;
+}
+.cta-section p {
+  font-size: 17px;
+  color: #f0ecff;
+}
+.cta-section .eyebrow,
+.cta-section > div > span:not(.eyebrow) {
+  font-size: 14px;
+  color: #e5dfff;
+}
+.nav nav .mega-product-group a,
+.mega-content p,
+.mega-module-links small {
+  font-size: 16px;
+}
+.mega-calculators > a {
+  font-size: 16px !important;
+}
+.mega-report-strip b {
+  font-size: 15px;
+}
+.mega-report-strip small,
+.breadcrumb {
+  font-size: 14px;
+}
+.resource-tabs {
+  font-size: 16px;
+}
+@media (min-width: 1101px) and (max-width: 1180px) {
+  .mega-navigation {
+    gap: 10px;
+  }
+  .nav nav a,
+  .mega-navigation > button {
+    font-size: 15px;
+  }
+  .nav .login-link {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .nav {
+    height: 70px;
+  }
+  .nav nav {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 70px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    padding: 22px;
+    flex-direction: column;
+    align-items: stretch;
+    max-height: calc(100dvh - 80px);
+    overflow: auto;
+  }
+  .nav nav.is-open {
+    display: flex;
+  }
+  .menu-toggle {
+    display: block;
+  }
+  .nav-actions .login-link {
+    display: none;
+  }
+  .mega-navigation {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .mega-navigation > button {
+    justify-content: space-between;
+  }
+  .mega-panel {
+    position: static;
+    max-height: none;
+    box-shadow: none;
+    border: 0;
+    padding: 15px 0;
+    margin: 0;
+    order: 8;
+  }
+  .mega-panel.discover,
+  .mega-panel.products,
+  .mega-panel.sectors,
+  .mega-panel.corporate {
+    grid-template-columns: 1fr;
+  }
+  .mega-close,
+  .mega-intro {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .hero-copy > p,
+  .resource-hero p,
+  .section-title p {
+    font-size: 18px;
+  }
+  .nav nav a,
+  .mega-navigation > button {
+    font-size: 17px;
+  }
+  .nav-actions > .button {
+    font-size: 14px;
+  }
+  .topbar {
+    font-size: 12px;
+  }
+  .hero h1 {
+    font-size: 34px;
+  }
+  .hero-assurances {
+    font-size: 14px;
+  }
+  .tool-card h3 {
+    font-size: 19px;
+  }
+  .tool-card p {
+    font-size: 16px;
+  }
+  .tool-card .text-link {
+    font-size: 14px;
+  }
+  .maturity-options label,
+  .calculator-output dl > div {
+    font-size: 16px;
+  }
+  .pricing-note {
+    align-items: flex-start;
+    text-align: center;
+  }
+}
+@media (max-width: 380px) {
+  .nav {
+    gap: 6px;
+  }
+  .nav-actions {
+    gap: 6px;
+  }
+  .logo > span {
+    font-size: 21px;
+  }
+  .logo svg {
+    width: 24px;
+    height: 24px;
+  }
+  .nav-actions > .button {
+    font-size: 13px;
+    padding-inline: 8px;
+    gap: 6px;
+  }
+  .logo {
+    gap: 6px;
+  }
+  .menu-toggle {
+    padding: 0;
+  }
+  .hero h1 {
+    font-size: 31px;
+  }
+}

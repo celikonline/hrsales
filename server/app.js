@@ -9,7 +9,12 @@ import { createMailer } from './mail.js';
 import { createProductAdapter } from './product.js';
 
 export function readConfig(env = process.env) {
+  const whatsappPhone = (env.WHATSAPP_PHONE || '').replace(/[+\s()-]/g, '');
+  const whatsappUrl = /^[1-9]\d{9,14}$/.test(whatsappPhone)
+    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent('Merhaba, SenseIK / SenseHR için demo bilgisi almak istiyorum.')}`
+    : '';
   return {
+    whatsappUrl,
     production: env.NODE_ENV === 'production',
     publicUrl: (env.PUBLIC_URL || 'http://localhost:4173').replace(/\/$/, ''),
     adminEmail: env.ADMIN_EMAIL || 'admin@senseik.local',
@@ -40,6 +45,7 @@ export function readConfig(env = process.env) {
   };
 }
 const fields = {
+  requestType: z.enum(['demo', 'presentation']).default('demo'),
   fullName: z.string().trim().min(3).max(100),
   company: z.string().trim().min(2).max(200),
   email: z
@@ -49,7 +55,11 @@ const fields = {
   phone: z
     .string()
     .trim()
-    .regex(/^[+\d\s()-]{10,25}$/, 'Geçerli bir telefon numarası girin.'),
+    .regex(/^[+\d\s()-]{10,25}$/, 'Geçerli bir telefon numarası girin.')
+    .refine((value) => {
+      const digits = value.replace(/\D/g, '').length;
+      return digits >= 10 && digits <= 15;
+    }, 'Telefon numarası 10 ile 15 rakam içermelidir.'),
   employees: z.number().int().min(1).max(100000),
   modules: z
     .array(z.enum(modules.map((m) => m.key)))
@@ -62,6 +72,22 @@ const fields = {
   website: z.string().max(0).optional(),
 };
 const leadSchema = z.object(fields);
+const quickLeadSchema = leadSchema
+  .pick({
+    email: true,
+    phone: true,
+    privacyAccepted: true,
+    website: true,
+    plan: true,
+    notes: true,
+  })
+  .extend({ modules: fields.modules.default(['employee', 'leave', 'payroll']) })
+  .transform((input) => ({
+    ...input,
+    fullName: '',
+    company: '',
+    employees: null,
+  }));
 const cookieName = 'sense_session';
 const time = () => new Date().toISOString();
 const future = (days) => new Date(Date.now() + days * 86400000).toISOString();
@@ -131,14 +157,18 @@ export function createApp(store, config, injected = {}) {
     limit: 10,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: { message: 'Çok sayıda istek gönderdiniz. Daha sonra tekrar deneyin.' },
+    message: {
+      message: 'Çok sayıda istek gönderdiniz. Daha sonra tekrar deneyin.',
+    },
   });
   const authLimit = rateLimit({
     windowMs: 900000,
     limit: 10,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: { message: 'Çok sayıda giriş denemesi. 15 dakika sonra tekrar deneyin.' },
+    message: {
+      message: 'Çok sayıda giriş denemesi. 15 dakika sonra tekrar deneyin.',
+    },
   });
   function issueSession(res, role, leadId, expiresAt) {
     const raw = token();
@@ -167,9 +197,9 @@ export function createApp(store, config, injected = {}) {
       if (role === 'demo') {
         req.lead = store.lead(session.lead_id);
         if (!req.lead || !validLicense(req.lead))
-          return res
-            .status(403)
-            .json({ message: 'Demo veya lisans süreniz doldu ya da erişiminiz iptal edildi.' });
+          return res.status(403).json({
+            message: 'Demo veya lisans süreniz doldu ya da erişiminiz iptal edildi.',
+          });
       }
       next();
     };
@@ -210,17 +240,21 @@ export function createApp(store, config, injected = {}) {
       trialDays: config.trialDays,
       privacyUrl: config.privacyUrl,
       supportEmail: config.supportEmail,
+      whatsappUrl: config.whatsappUrl,
       productWeb: config.productWeb,
       mode: config.productMode,
     }),
   );
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
-  app.post('/api/demo-requests', publicLimit, (req, res) => {
-    const input = leadSchema.parse(req.body);
+  app.post(['/api/demo-requests', '/api/demo-requests/quick'], publicLimit, (req, res) => {
+    const quick = req.path.endsWith('/quick');
+    const input = (quick ? quickLeadSchema : leadSchema).parse(req.body);
     // Do not disclose whether this address already has a request.
     const existing = store.db
-      .prepare("SELECT id FROM leads WHERE email=? AND status IN ('pending','approved')")
-      .get(input.email);
+      .prepare(
+        "SELECT id FROM leads WHERE email=? AND status IN ('pending','approved') AND COALESCE(json_extract(body, '$.requestType'), 'demo')=?",
+      )
+      .get(input.email, input.requestType || 'demo');
     if (!existing)
       store.transaction(() => {
         const lead = {
@@ -234,16 +268,22 @@ export function createApp(store, config, injected = {}) {
           product: null,
         };
         store.saveLead(lead);
-        store.audit('demo.requested', lead.id, 'public');
+        const presentation = lead.requestType === 'presentation';
+        const requestLabel = presentation ? 'online sunum' : 'demo';
+        store.audit(presentation ? 'presentation.requested' : 'demo.requested', lead.id, 'public');
         mailer.enqueue(
           lead.email,
-          'SenseIK demo talebinizi aldık',
-          `Merhaba ${lead.fullName},\n\n${lead.company} için ${lead.employees} çalışan ve ${lead.modules.map(moduleName).join(', ')} modülleriyle demo talebiniz alındı. Ekibimiz başvurunuzu inceleyecek. Onaylandığında giriş bağlantınız bu adrese gönderilecek.\n\nSenseIK ekibi`,
+          `SenseIK ${requestLabel} talebinizi aldık`,
+          presentation
+            ? `Merhaba ${lead.fullName},\n\n${lead.company} için online sunum talebiniz alındı. Ekibimiz size özel online sunumu planlamak için bu e-posta adresinden sizinle iletişime geçecek. Görüşme zamanı birlikte belirlenecek.\n\nSenseIK ekibi`
+            : quick
+              ? 'Merhaba,\n\nDemo talebiniz alındı. Ekibimiz bu e-posta adresinden sizinle iletişime geçerek ihtiyacınıza uygun demoyu planlayacak.\n\nSenseIK ekibi'
+              : `Merhaba ${lead.fullName},\n\n${lead.company} için ${lead.employees} çalışan ve ${lead.modules.map(moduleName).join(', ')} modülleriyle demo talebiniz alındı. Ekibimiz başvurunuzu inceleyecek. Onaylandığında giriş bağlantınız bu adrese gönderilecek.\n\nSenseIK ekibi`,
         );
         mailer.enqueue(
           config.notifyEmail,
-          `Yeni demo talebi: ${lead.company}`,
-          `${lead.fullName}\n${lead.email}\n${lead.phone}\nÇalışan: ${lead.employees}\nModüller: ${lead.modules.map(moduleName).join(', ')}\nNot: ${lead.notes}\n\nİnceleyin: ${config.publicUrl}/admin`,
+          `Yeni ${requestLabel} talebi: ${lead.company || lead.email}`,
+          `${lead.fullName || 'Hızlı demo talebi'}\n${lead.email}\n${lead.phone || 'Telefon henüz paylaşılmadı'}\nÇalışan: ${lead.employees ?? 'Henüz paylaşılmadı'}\nModüller: ${lead.modules.map(moduleName).join(', ')}\nNot: ${lead.notes}\n\nİnceleyin: ${config.publicUrl}/admin`,
         );
       });
     res.status(202).json({
@@ -306,8 +346,22 @@ export function createApp(store, config, injected = {}) {
       if (lead.status !== 'pending')
         return res.status(409).json({ message: 'Yalnız bekleyen talepler onaylanabilir.' });
       const input = z
-        .object({ days: z.number().int().min(1).max(30), modules: fields.modules })
-        .parse(req.body);
+        .object({
+          days: z.number().int().min(1).max(30),
+          modules: fields.modules,
+          fullName: fields.fullName,
+          company: fields.company,
+          employees: fields.employees,
+        })
+        .parse({
+          fullName: lead.fullName,
+          company: lead.company,
+          employees: lead.employees,
+          ...req.body,
+        });
+      lead.fullName = input.fullName;
+      lead.company = input.company;
+      lead.employees = input.employees;
       lead.modules = input.modules;
       lead.license = {
         status: 'trial',
@@ -411,10 +465,30 @@ export function createApp(store, config, injected = {}) {
       productLogin: `${config.productWeb}/login`,
       sample: {
         employees: [
-          { name: 'Elif Yılmaz', department: 'İnsan Kaynakları', role: 'İK Uzmanı', avatar: 'EY' },
-          { name: 'Can Demir', department: 'Ürün', role: 'Ürün Yöneticisi', avatar: 'CD' },
-          { name: 'Deniz Kaya', department: 'Yazılım', role: 'Yazılım Geliştirici', avatar: 'DK' },
-          { name: 'Zeynep Arslan', department: 'Finans', role: 'Finans Uzmanı', avatar: 'ZA' },
+          {
+            name: 'Elif Yılmaz',
+            department: 'İnsan Kaynakları',
+            role: 'İK Uzmanı',
+            avatar: 'EY',
+          },
+          {
+            name: 'Can Demir',
+            department: 'Ürün',
+            role: 'Ürün Yöneticisi',
+            avatar: 'CD',
+          },
+          {
+            name: 'Deniz Kaya',
+            department: 'Yazılım',
+            role: 'Yazılım Geliştirici',
+            avatar: 'DK',
+          },
+          {
+            name: 'Zeynep Arslan',
+            department: 'Finans',
+            role: 'Finans Uzmanı',
+            avatar: 'ZA',
+          },
         ],
         requests: [
           {
@@ -534,9 +608,9 @@ export function createApp(store, config, injected = {}) {
         .parse(req.body);
       const lead = store.lead(order.leadId);
       if (!lead || lead.license?.status === 'revoked')
-        return res
-          .status(409)
-          .json({ message: 'İptal edilmiş erişimde lisans etkinleştirilemez.' });
+        return res.status(409).json({
+          message: 'İptal edilmiş erişimde lisans etkinleştirilemez.',
+        });
       const expiry = new Date();
       if (order.cycle === 'yearly') expiry.setUTCFullYear(expiry.getUTCFullYear() + 1);
       else expiry.setUTCMonth(expiry.getUTCMonth() + 1);
@@ -587,7 +661,10 @@ export function createApp(store, config, injected = {}) {
     if (error instanceof z.ZodError)
       return res.status(400).json({
         message: 'Lütfen alanları kontrol edin.',
-        fields: error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        fields: error.issues.map((i) => ({
+          path: i.path.join('.'),
+          message: i.message,
+        })),
       });
     if (error.type === 'entity.parse.failed' || error.type === 'entity.too.large')
       return res.status(400).json({ message: 'Geçersiz veya çok büyük istek.' });

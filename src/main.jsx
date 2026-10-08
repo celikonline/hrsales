@@ -127,6 +127,14 @@ import {
   DiscoverTeaser,
   PlatformSections,
 } from './discover.jsx';
+import { MobileShowcase } from './MobileShowcase.jsx';
+import { ProductPreview } from './ProductVisual.jsx';
+import { ProductStory } from './ProductStory.jsx';
+import { PresentationRequest } from './PresentationRequest.jsx';
+import { ReferenceBrands } from './ReferenceBrands.jsx';
+import { WhatsAppLink } from './WhatsAppLink.jsx';
+import './typography.css';
+import { QuickDemoForm } from './QuickDemoForm.jsx';
 import {
   modules as fallbackModules,
   plans as fallbackPlans,
@@ -217,9 +225,12 @@ function Button({ children, secondary, className = '', ...props }) {
     </button>
   );
 }
-function DemoLink({ children = 'Demo talep et', className = '', plan }) {
+function DemoLink({ children = 'Demo talep et', className = '', plan, modules = [] }) {
+  const params = new URLSearchParams();
+  if (plan) params.set('paket', plan);
+  modules.forEach((module) => params.append('modul', module));
   return (
-    <a className={`button ${className}`} href={`/demo-talebi${plan ? `?paket=${plan}` : ''}`}>
+    <a className={`button ${className}`} href={`/demo-talebi${params.size ? `?${params}` : ''}`}>
       {children}
       <Icon name="ArrowUpRight" size={18} />
     </a>
@@ -234,8 +245,8 @@ function Header({ catalog }) {
           <span>
             <span className="live-dot" /> Ekibinizin ihtiyacına göre, size özel demo
           </span>
-          <a href="/#nasil-calisir">
-            {catalog.trialDays} gün keşfedin <Icon name="ArrowRight" size={14} />
+          <a href="/online-sunum-talep-et">
+            Online sunum talep et <Icon name="ArrowRight" size={14} />
           </a>
         </div>
       </div>
@@ -261,6 +272,7 @@ function Header({ catalog }) {
           </div>
         </div>
       </header>
+      <WhatsAppLink catalog={catalog} floating />
     </>
   );
 }
@@ -280,6 +292,8 @@ function Footer({ catalog }) {
         <div>
           <h4>Ürünü keşfedin</h4>
           <a href="/#moduller">İK modülleri</a>
+          <a href="/#urun-ekranlari">Ürün ekranları</a>
+          <a href="/#mobil-deneyim">Mobil deneyim</a>
           <a href="/#paketler">Paket & lisans</a>
           <a href="/#nasil-calisir">Nasıl başlarsınız?</a>
           <a href="/sektorler">Sektör çözümleri</a>
@@ -291,6 +305,7 @@ function Footer({ catalog }) {
         </div>
         <div>
           <h4>Birlikte başlayalım</h4>
+          <a href="/online-sunum-talep-et">Online sunum talep et</a>
           <a href="/demo-talebi">Demo talep et</a>
           <a href="/giris">Demo girişi</a>
           <a href="/giris?urun=1">SenseHR girişi</a>
@@ -315,180 +330,6 @@ function Footer({ catalog }) {
         </div>
       </div>
     </footer>
-  );
-}
-const previewPeople = [
-  { name: 'Elif Yılmaz', initials: 'EY', team: 'İnsan Kaynakları', color: 'peach' },
-  { name: 'Can Demir', initials: 'CD', team: 'Ürün & Tasarım', color: 'lilac' },
-  { name: 'Deniz Kaya', initials: 'DK', team: 'Yazılım', color: 'mint' },
-];
-function ProductPreview({ selected = 'employee', large = false }) {
-  const panelTitle =
-    selected === 'expense'
-      ? 'Masraf yönetimi'
-      : selected === 'leave'
-        ? 'İzin yönetimi'
-        : 'İK genel bakış';
-  return (
-    <div
-      className={`product-preview ${large ? 'large' : ''}`}
-      aria-label="SenseHR örnek ürün görünümü"
-    >
-      <div className="browser-bar">
-        <div>
-          <i />
-          <i />
-          <i />
-        </div>
-        <span>
-          <Icon name="LockKeyhole" size={10} /> sensehr · örnek ürün görünümü
-        </span>
-        <Icon name="Ellipsis" size={16} />
-      </div>
-      <div className="preview-inner">
-        <aside className="preview-sidebar">
-          <div className="preview-brand">
-            <Icon name="Sparkles" size={18} />
-            <b>sensehr</b>
-          </div>
-          <span className="preview-company">
-            Örnek şirket <Icon name="ChevronsUpDown" size={10} />
-          </span>
-          {[
-            ['LayoutDashboard', 'Genel bakış', 'employee'],
-            ['Users', 'Çalışanlar', 'people'],
-            ['CalendarDays', 'İzin yönetimi', 'leave'],
-            ['Wallet', 'Masraf & avans', 'expense'],
-            ['Clock3', 'PDKS & vardiya', 'attendance'],
-            ['ChartNoAxesCombined', 'Raporlar', 'reporting'],
-          ].map(([icon, name, key]) => (
-            <div key={key} className={`preview-nav ${selected === key ? 'active' : ''}`}>
-              <Icon name={icon} size={13} />
-              {name}
-            </div>
-          ))}
-          <div className="preview-help">
-            <span>Her şey yolunda.</span>
-            <small>Ekibiniz için buradayız.</small>
-          </div>
-          <div className="preview-profile">
-            <span className="avatar lilac">AY</span>
-            <div>
-              <b>Ayşe Yıldız</b>
-              <small>İK yöneticisi</small>
-            </div>
-          </div>
-        </aside>
-        <div className="preview-content">
-          <div className="preview-top">
-            <span>
-              Çalışma alanı <Icon name="ChevronRight" size={10} /> {panelTitle}
-            </span>
-            <div>
-              <Icon name="Search" size={12} />
-              <Icon name="Bell" size={12} />
-              <span className="avatar mint">AY</span>
-            </div>
-          </div>
-          <div className="preview-heading">
-            <div>
-              <small>HER GÜN, DAHA İYİ BİR ÇALIŞAN DENEYİMİ</small>
-              <h3>{selected === 'employee' ? 'Günaydın, Ayşe ☀' : panelTitle}</h3>
-              <p>
-                {selected === 'employee'
-                  ? 'Ekibinizin nabzı, tek bir ekranda.'
-                  : 'Talepler, bakiyeler ve onaylar bir arada.'}
-              </p>
-            </div>
-            <span className="preview-date">
-              Ekim 2026 <Icon name="CalendarDays" size={11} />
-            </span>
-          </div>
-          <div className="preview-stats">
-            {(selected === 'expense'
-              ? [
-                  ['Toplam masraf', '₺24.850', 'Bu ay'],
-                  ['Onay bekleyen', '8', 'Talep'],
-                  ['Ödenen', '₺18.400', 'Bu ay'],
-                ]
-              : [
-                  ['Toplam çalışan', '128', '6 departman'],
-                  ['Bugün izinli', '7', 'Ekip takvimini gör'],
-                  ['Onay bekleyen', '12', '4 yeni talep'],
-                ]
-            ).map(([title, value, note], i) => (
-              <div key={title}>
-                <span>
-                  {title}
-                  <Icon name={['Users', 'CalendarDays', 'Clock3'][i]} size={14} />
-                </span>
-                <strong>{value}</strong>
-                <small>
-                  <span className="tiny-dot" />
-                  {note}
-                </small>
-              </div>
-            ))}
-          </div>
-          <div className="preview-panels">
-            <div className="preview-chart">
-              <div className="panel-title">
-                <b>Ekip büyümesi</b>
-                <span>
-                  Son 6 ay <Icon name="ChevronDown" size={9} />
-                </span>
-              </div>
-              <div className="chart-area">
-                <div className="chart-labels">
-                  <span>150</span>
-                  <span>100</span>
-                  <span>50</span>
-                </div>
-                <div className="bars">
-                  {[44, 57, 51, 69, 75, 89].map((h, i) => (
-                    <div key={i}>
-                      <div style={{ height: `${h}%` }} className={i === 5 ? 'highlight' : ''} />
-                      <span>{['May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki'][i]}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="chart-caption">
-                <span className="tiny-dot" />
-                Çalışan sayısı <b>Birlikte büyüyoruz ↗</b>
-              </div>
-            </div>
-            <div className="preview-approvals">
-              <div className="panel-title">
-                <b>Bekleyen talepler</b>
-                <span>Tümü →</span>
-              </div>
-              {previewPeople.slice(0, 2).map((person, i) => (
-                <div className="preview-person" key={person.name}>
-                  <span className={`avatar ${person.color}`}>{person.initials}</span>
-                  <div>
-                    <b>{person.name}</b>
-                    <small>{i === 0 ? 'Yıllık izin · 3 gün' : 'Masraf · ₺1.250'}</small>
-                  </div>
-                  <span className="waiting">Bekliyor</span>
-                </div>
-              ))}
-              <div className="preview-calendar">
-                <Icon name="CalendarCheck2" size={24} />
-                <div>
-                  <b>Planlar net, ekip hazır.</b>
-                  <small>İzinleri ekip takviminde keşfedin.</small>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="preview-bottom">
-            <span className="tiny-dot" /> Tüm göstergeler temsili örnek veridir.
-            <span>Güzel bir iş günü olsun.</span>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 function SectionTitle({ eyebrow, title, children, center = true }) {
@@ -593,9 +434,13 @@ function Plans({ catalog, purchase = false, onSelect }) {
   );
 }
 function Landing({ catalog }) {
-  const [active, setActive] = useState('leave');
   const [allModules, setAllModules] = useState(false);
-  const visibleModules = allModules ? catalog.modules : catalog.modules.slice(0, 6);
+  const priority = ['payroll', 'leave', 'employee', 'expense', 'attendance', 'performance'];
+  const orderedModules = [...catalog.modules].sort((a, b) => {
+    const rank = (key) => (priority.includes(key) ? priority.indexOf(key) : priority.length);
+    return rank(a.key) - rank(b.key);
+  });
+  const visibleModules = allModules ? orderedModules : orderedModules.slice(0, 6);
   return (
     <>
       <Header catalog={catalog} />
@@ -608,19 +453,19 @@ function Landing({ catalog }) {
               <span className="live-dot" /> Daha sade bir İK, daha güçlü bir ekip
             </span>
             <h1>
-              İK'da daha az iş yükü.
+              Bordro ve izin, tek bir düzende.
               <br />
-              <span>İnsana daha çok zaman.</span>
+              <span>Ekibinize daha çok zaman.</span>
             </h1>
             <p>
-              Özlükten izne, masraftan performansa tüm İK süreçlerinizi
-              <br className="desktop-break" /> tek platformda birleştirin. Ekibinizle birlikte
-              büyüyün.
+              Çalışan bilgilerini, izin planını ve bordro operasyonunu
+              <br className="desktop-break" /> SenseHR'da bir araya getirin. Web'de ve mobilde, aynı
+              akışta.
             </p>
+            <QuickDemoForm catalog={catalog} modules={['employee', 'payroll', 'leave']} hero />
             <div className="hero-actions">
-              <DemoLink>Size özel demo talep edin</DemoLink>
-              <a href="#moduller" className="hero-secondary">
-                Modülleri keşfedin <Icon name="ArrowDown" size={17} />
+              <a href="/online-sunum-talep-et?modul=payroll&modul=leave" className="hero-secondary">
+                Online sunum talep et <Icon name="ArrowUpRight" size={17} />
               </a>
             </div>
             <div className="hero-assurances">
@@ -638,6 +483,17 @@ function Landing({ catalog }) {
               </span>
             </div>
           </div>
+          <div className="hero-topic-links">
+            <a href="#urun-payroll">
+              <Icon name="ReceiptText" size={18} /> Bordro & ücret
+            </a>
+            <a href="#urun-leave">
+              <Icon name="CalendarDays" size={18} /> İzin & onay
+            </a>
+            <a href="#mobil-deneyim">
+              <Icon name="MonitorSmartphone" size={18} /> Mobil deneyim
+            </a>
+          </div>
           <div className="hero-product">
             <div className="floating-badge">
               <span className="mint">
@@ -649,11 +505,20 @@ function Landing({ catalog }) {
               </div>
             </div>
             <ProductPreview />
+            <img
+              className="hero-device-phone"
+              src="/images/product/mobile-home.jpg"
+              alt="SenseHR gerçek mobil ana ekranı · Demo veriler"
+              width="540"
+              height="1170"
+              decoding="async"
+            />
             <div className="product-caption">
-              <span className="tiny-dot" /> SenseHR ürün deneyimi · örnek veriler
+              <span className="tiny-dot" /> SenseHR gerçek web ve mobil ekranları · Demo veriler
             </div>
           </div>
         </section>
+        <ReferenceBrands />
         <section className="benefits-strip container">
           <div>
             <Icon name="Layers3" />
@@ -680,6 +545,7 @@ function Landing({ catalog }) {
             </span>
           </div>
         </section>
+        <ProductStory />
         <section className="section container" id="moduller">
           <SectionTitle
             eyebrow="EKİBİNİZ İÇİN, BİR ARADA"
@@ -715,71 +581,7 @@ function Landing({ catalog }) {
             </Button>
           </div>
         </section>
-        <section className="experience-section" id="neden-senseik">
-          <div className="container experience">
-            <div>
-              <SectionTitle
-                center={false}
-                eyebrow="DAHA AZ OPERASYON. DAHA İYİ DENEYİM."
-                title={
-                  <>
-                    İşler yolunda.
-                    <br />
-                    Ekibiniz <span>bir arada.</span>
-                  </>
-                }
-              >
-                İK ekibiniz, yöneticileriniz ve çalışanlarınız aynı süreçte buluşsun. Herkes ne
-                yapacağını bilsin.
-              </SectionTitle>
-              <div className="feature-tabs">
-                {[
-                  [
-                    'leave',
-                    'CalendarDays',
-                    'İzin takibi, zahmetsiz.',
-                    'Bakiye, ekip takvimi ve onaylar aynı akışta.',
-                  ],
-                  [
-                    'expense',
-                    'Wallet',
-                    'Masraflar görünür, onaylar net.',
-                    'Talepten onaya kadar her adımı takip edin.',
-                  ],
-                  [
-                    'employee',
-                    'Users',
-                    'Ekibinizin bilgisi, hep güncel.',
-                    'Çalışan kayıtları ve belgeler elinizin altında.',
-                  ],
-                ].map(([key, icon, title, text]) => (
-                  <button
-                    className={active === key ? 'active' : ''}
-                    key={key}
-                    onClick={() => setActive(key)}
-                  >
-                    <Icon name={icon} size={23} />
-                    <span>
-                      <b>{title}</b>
-                      <small>{text}</small>
-                    </span>
-                    <Icon name="ChevronRight" size={17} />
-                  </button>
-                ))}
-              </div>
-              <a className="text-link" href="/demo-talebi">
-                Kendi senaryonuzla deneyin <Icon name="ArrowRight" size={16} />
-              </a>
-            </div>
-            <div className="experience-preview">
-              <ProductPreview selected={active} />
-              <div className="experience-callout">
-                <Icon name="HeartHandshake" size={20} />
-                <span>Çalışanlar için kolay. İK için düzenli.</span>
-              </div>
-            </div>
-          </div>
-        </section>
+        <MobileShowcase />
         <section className="section container" id="nasil-calisir">
           <SectionTitle
             eyebrow="TANIŞMAKTAN KULLANMAYA"
@@ -797,7 +599,7 @@ function Landing({ catalog }) {
                 '01',
                 'MousePointer2',
                 'Demo talep edin',
-                'Çalışan sayınızı ve keşfetmek istediğiniz modülleri seçin.',
+                'Şirket e-postanızı ve telefonunuzu paylaşın; demo talebinizi gönderin.',
               ],
               [
                 '02',
@@ -928,329 +730,30 @@ function Field({ label, error, ...props }) {
 }
 function DemoRequest({ catalog }) {
   const params = new URLSearchParams(location.search);
-  const requestedModule = catalog.modules.some((m) => m.key === params.get('modul'))
-    ? params.get('modul')
-    : null;
-  const [step, setStep] = useState(1),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [sent, setSent] = useState(false);
-  const [form, setForm] = useState({
-    fullName: '',
-    company: '',
-    email: '',
-    phone: '',
-    employees: 50,
-    modules: [
-      'employee',
-      ...(requestedModule && requestedModule !== 'employee'
-        ? [requestedModule]
-        : ['leave', 'expense']),
-    ],
-    plan: fallbackPlans.some((p) => p.key === params.get('paket')) ? params.get('paket') : 'growth',
-    notes: '',
-    privacyAccepted: false,
-    website: '',
-  });
-  const change = (key, value) => setForm((f) => ({ ...f, [key]: value }));
-  async function submit(e) {
-    e.preventDefault();
-    setError('');
-    if (step < 3) {
-      setStep(step + 1);
-      return;
-    }
-    setBusy(true);
-    try {
-      await api('/demo-requests', form);
-      setSent(true);
-    } catch (e) {
-      setError(e.message + (e.fields ? ' ' + e.fields.map((f) => f.message).join(' ') : ''));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const requestedModules = params
+    .getAll('modul')
+    .filter((key) => catalog.modules.some((module) => module.key === key));
+  const plan = catalog.plans.some((item) => item.key === params.get('paket'))
+    ? params.get('paket')
+    : 'growth';
   return (
     <>
       <Header catalog={catalog} />
-      <main className="request-page container">
+      <main className="quick-request-page container">
         <a className="back-link" href="/">
           <Icon name="ArrowLeft" size={16} /> Ana sayfaya dön
         </a>
-        <div className="request-layout">
-          <aside className="request-aside">
-            <span className="eyebrow">BİRLİKTE BAŞLAYALIM</span>
-            <h1>
-              Önce tanışalım.
-              <br />
-              <span>Sonra kolaylaştıralım.</span>
-            </h1>
-            <p>
-              Ekibinizin büyüklüğünü ve önceliklerinizi paylaşın. Size uygun demo deneyimini
-              hazırlayalım.
-            </p>
-            <div className="request-journey">
-              {[
-                ['Users', 'Ekibinizi tanıyalım', 'Çalışan sayınız ve şirket bilgileriniz.'],
-                ['Layers3', 'İhtiyacınızı anlayalım', 'Keşfetmek istediğiniz modüller.'],
-                ['MailCheck', 'Davetinizi gönderelim', 'İnceleme ve onay sonrası güvenli giriş.'],
-              ].map(([icon, title, text], i) => (
-                <div key={title}>
-                  <span className={step > i ? 'current' : ''}>
-                    <Icon name={icon} size={22} />
-                  </span>
-                  <div>
-                    <h3>{title}</h3>
-                    <p>{text}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="request-assurance">
-              <Icon name="ShieldCheck" size={24} />
-              <p>
-                <b>Kontrol sizde.</b>
-                <br />
-                {catalog.trialDays} günlük demo. Kredi kartı gerekmez. Başvuru satın alma
-                zorunluluğu oluşturmaz.
-              </p>
-            </div>
-          </aside>
-          <section className="form-card">
-            {sent ? (
-              <div className="success-screen">
-                <span className="success-icon">
-                  <Icon name="MailCheck" size={40} />
-                </span>
-                <span className="eyebrow">İLK ADIM TAMAM</span>
-                <h2>Tanışacağımız için mutluyuz.</h2>
-                <p>
-                  Demo talebiniz alındı. Ekibimiz inceledikten sonra <b>{form.email}</b> adresine
-                  bilgi verecek.
-                </p>
-                <div className="notice">
-                  <Icon name="Info" />
-                  <span>
-                    Onay sonrası güvenli demo bağlantısı e-postanıza gönderilir. Spam klasörünüzü de
-                    kontrol edin.
-                  </span>
-                </div>
-                <a className="button" href="/">
-                  Ana sayfaya dön <Icon name="ArrowRight" size={16} />
-                </a>
-              </div>
-            ) : (
-              <>
-                <div className="form-progress">
-                  <span>DEMO TALEBİ</span>
-                  <b>Adım {step} / 3</b>
-                </div>
-                <div className="progress-bars">
-                  {[1, 2, 3].map((n) => (
-                    <span className={n <= step ? 'filled' : ''} key={n} />
-                  ))}
-                </div>
-                <h2>
-                  {['Ekibinizi tanıyalım.', 'Neyi kolaylaştıralım?', 'Son bir kontrol.'][step - 1]}
-                </h2>
-                <p className="form-intro">
-                  {
-                    [
-                      'Size ulaşabileceğimiz bilgileri paylaşın.',
-                      'Demoda keşfetmek istediğiniz modülleri seçin.',
-                      'Talebiniz ekibimiz tarafından incelenecek.',
-                    ][step - 1]
-                  }
-                </p>
-                <form onSubmit={submit}>
-                  <div className="honeypot" aria-hidden="true">
-                    <label>
-                      Web sitesi
-                      <input
-                        tabIndex={-1}
-                        autoComplete="off"
-                        value={form.website}
-                        onChange={(e) => change('website', e.target.value)}
-                      />
-                    </label>
-                  </div>
-                  {step === 1 && (
-                    <>
-                      <Field
-                        label="Ad soyad"
-                        placeholder="Örn. Ayşe Yıldız"
-                        autoComplete="name"
-                        required
-                        minLength={3}
-                        maxLength={100}
-                        value={form.fullName}
-                        onChange={(e) => change('fullName', e.target.value)}
-                      />
-                      <Field
-                        label="Şirket adı"
-                        placeholder="Şirketinizin adı"
-                        autoComplete="organization"
-                        required
-                        minLength={2}
-                        maxLength={200}
-                        value={form.company}
-                        onChange={(e) => change('company', e.target.value)}
-                      />
-                      <div className="form-two">
-                        <Field
-                          label="İş e-postası"
-                          placeholder="ad@şirketiniz.com"
-                          type="email"
-                          autoComplete="email"
-                          required
-                          value={form.email}
-                          onChange={(e) => change('email', e.target.value)}
-                        />
-                        <Field
-                          label="Telefon"
-                          placeholder="05xx xxx xx xx"
-                          type="tel"
-                          autoComplete="tel"
-                          pattern="[+0-9 ()\-]{10,25}"
-                          required
-                          value={form.phone}
-                          onChange={(e) => change('phone', e.target.value)}
-                        />
-                      </div>
-                      <Field
-                        label="Kaç çalışanınız var?"
-                        type="number"
-                        min="1"
-                        max="100000"
-                        required
-                        value={form.employees}
-                        onChange={(e) => change('employees', Number(e.target.value))}
-                      />
-                    </>
-                  )}
-                  {step === 2 && (
-                    <>
-                      <div className="module-choices">
-                        {catalog.modules.map((m) => (
-                          <label
-                            className={`module-choice ${form.modules.includes(m.key) ? 'chosen' : ''}`}
-                            key={m.key}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={form.modules.includes(m.key)}
-                              disabled={m.base}
-                              onChange={(e) =>
-                                change(
-                                  'modules',
-                                  e.target.checked
-                                    ? [...form.modules, m.key]
-                                    : form.modules.filter((k) => k !== m.key),
-                                )
-                              }
-                            />
-                            <Icon name={m.icon} size={20} />
-                            <span>
-                              {m.name}
-                              {m.base && <small>Temel modül · her zaman dahil</small>}
-                            </span>
-                            <Icon
-                              name={form.modules.includes(m.key) ? 'SquareCheck' : 'Square'}
-                              size={18}
-                            />
-                          </label>
-                        ))}
-                      </div>
-                      <label className="field">
-                        <span>
-                          Öncelikleriniz <small>İsteğe bağlı</small>
-                        </span>
-                        <textarea
-                          placeholder="Örn. İzinleri Excel’de takip ediyoruz, onay akışlarını kolaylaştırmak istiyoruz."
-                          maxLength={1500}
-                          rows={3}
-                          value={form.notes}
-                          onChange={(e) => change('notes', e.target.value)}
-                        />
-                      </label>
-                    </>
-                  )}
-                  {step === 3 && (
-                    <>
-                      <div className="request-summary">
-                        <div>
-                          <span>Şirket</span>
-                          <b>{form.company}</b>
-                        </div>
-                        <div>
-                          <span>İletişim</span>
-                          <b>
-                            {form.fullName}
-                            <small>{form.email}</small>
-                          </b>
-                        </div>
-                        <div>
-                          <span>Çalışan sayısı</span>
-                          <b>{form.employees} çalışan</b>
-                        </div>
-                        <div>
-                          <span>İlgilendiğiniz paket</span>
-                          <b>{planName(form.plan)}</b>
-                        </div>
-                        <div>
-                          <span>Modüller</span>
-                          <div className="tags">
-                            {form.modules.map((m) => (
-                              <span key={m}>{moduleName(m)}</span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <label className="consent">
-                        <input
-                          type="checkbox"
-                          required
-                          checked={form.privacyAccepted}
-                          onChange={(e) => change('privacyAccepted', e.target.checked)}
-                        />
-                        <span>
-                          <a href={catalog.privacyUrl} target="_blank" rel="noreferrer">
-                            Gizlilik ve aydınlatma metnini
-                          </a>{' '}
-                          okudum. Başvurumun değerlendirilmesi ve benimle iletişim kurulması
-                          hakkında bilgilendirildim.
-                        </span>
-                      </label>
-                    </>
-                  )}
-                  <Notice error>{error}</Notice>
-                  <div className="form-buttons">
-                    {step > 1 && (
-                      <Button
-                        type="button"
-                        secondary
-                        onClick={() => {
-                          setStep(step - 1);
-                          setError('');
-                        }}
-                      >
-                        <Icon name="ArrowLeft" size={16} /> Geri
-                      </Button>
-                    )}
-                    <Button disabled={busy} type="submit">
-                      {busy ? 'Gönderiliyor…' : step === 3 ? 'Demo talebini gönder' : 'Devam et'}
-                      <Icon name="ArrowRight" size={17} />
-                    </Button>
-                  </div>
-                  <p className="form-footnote">
-                    <Icon name="LockKeyhole" size={13} /> Bilgileriniz demo başvurunuz için
-                    kullanılır.
-                  </p>
-                </form>
-              </>
-            )}
-          </section>
-        </div>
+        <section className="quick-request-content">
+          <span className="eyebrow">ÜCRETSİZ DEMO</span>
+          <h1>Ekibiniz için daha kolay bir İK.</h1>
+          <p>
+            Şirket e-postanızı ve telefon numaranızı paylaşın. SenseHR'ı birlikte keşfetmek için sizinle iletişime geçelim.
+          </p>
+          <QuickDemoForm catalog={catalog} modules={requestedModules} plan={plan} />
+          <a className="quick-request-support" href="/destek">
+            Destek talebi için tıklayın <Icon name="ArrowRight" size={16} />
+          </a>
+        </section>
       </main>
       <Footer catalog={catalog} />
     </>
@@ -1361,9 +864,19 @@ function Admin({ catalog }) {
     setMessage('');
     setForm(
       kind === 'approve'
-        ? { days: catalog.trialDays, modules: record.modules }
+        ? {
+            days: catalog.trialDays,
+            modules: record.modules,
+            fullName: record.fullName,
+            company: record.company,
+            employees: record.employees ?? '',
+          }
         : kind === 'quote'
-          ? { amount: record.estimatedSubtotal || '', taxPercent: 0, paymentInstructions: '' }
+          ? {
+              amount: record.estimatedSubtotal || '',
+              taxPercent: 0,
+              paymentInstructions: '',
+            }
           : kind === 'activate'
             ? { paymentReference: '', paymentVerified: false }
             : { reason: '' },
@@ -1445,7 +958,7 @@ function Admin({ catalog }) {
       </main>
     );
   const stats = [
-    ['Bekleyen demo', data.leads.filter((l) => l.status === 'pending').length, 'Inbox'],
+    ['Bekleyen talep', data.leads.filter((l) => l.status === 'pending').length, 'Inbox'],
     [
       'Aktif erişim',
       data.leads.filter(
@@ -1476,7 +989,7 @@ function Admin({ catalog }) {
         <Logo />
         <div className="workspace-label">SATIŞ & MÜŞTERİ BAŞARISI</div>
         {[
-          ['leads', 'Inbox', 'Demo talepleri'],
+          ['leads', 'Inbox', 'Demo & sunum talepleri'],
           ['orders', 'ShoppingBag', 'Satın alma & lisans'],
           ['mail', 'Mail', 'E-posta kuyruğu'],
           ['audit', 'History', 'İşlem geçmişi'],
@@ -1524,7 +1037,7 @@ function Admin({ catalog }) {
           <h1>
             {
               {
-                leads: 'Demo talepleri',
+                leads: 'Demo & sunum talepleri',
                 orders: 'Satın alma & lisans',
                 mail: 'E-posta kuyruğu',
                 audit: 'İşlem geçmişi',
@@ -1602,13 +1115,19 @@ function Admin({ catalog }) {
                     {filtered.map((lead) => (
                       <tr key={lead.id}>
                         <td>
-                          <b>{lead.company}</b>
+                          <b>{lead.company || 'Hızlı demo talebi'}</b>
                           <small>
-                            {lead.fullName} · {lead.email}
+                            {lead.requestType === 'presentation'
+                              ? 'Online sunum talebi'
+                              : 'Demo talebi'}
+                          </small>
+                          <small>
+                            {lead.fullName ? `${lead.fullName} · ` : ''}
+                            {lead.email}
                           </small>
                           <small>{lead.phone}</small>
                         </td>
-                        <td>{lead.employees}</td>
+                        <td>{lead.employees ?? 'Henüz paylaşılmadı'}</td>
                         <td>
                           <div className="tags">
                             {lead.modules.slice(0, 3).map((m) => (
@@ -1803,7 +1322,7 @@ function Admin({ catalog }) {
               approve: 'Demo erişimini onayla',
               reject: 'Başvuruyu reddet',
               revoke: 'Erişimi iptal et',
-              detail: selected.company,
+              detail: selected.company || 'Hızlı demo talebi',
               quote: 'Paket teklifini hazırla',
               activate: 'Ödemeyi teyit et, lisansı aç',
               'order-detail': 'Satın alma talebi',
@@ -1822,9 +1341,13 @@ function Admin({ catalog }) {
             <>
               <div className="request-summary">
                 <div>
+                  <span>Talep türü</span>
+                  <b>{selected.requestType === 'presentation' ? 'Online sunum' : 'Demo'}</b>
+                </div>
+                <div>
                   <span>İletişim</span>
                   <b>
-                    {selected.fullName}
+                    {selected.fullName || 'Henüz paylaşılmadı'}
                     <small>
                       {selected.email}
                       <br />
@@ -1834,7 +1357,7 @@ function Admin({ catalog }) {
                 </div>
                 <div>
                   <span>Çalışan</span>
-                  <b>{selected.employees}</b>
+                  <b>{selected.employees ?? 'Henüz paylaşılmadı'}</b>
                 </div>
                 <div>
                   <span>Paket</span>
@@ -1904,9 +1427,35 @@ function Admin({ catalog }) {
               {action === 'approve' && (
                 <>
                   <p>
-                    <b>{selected.company}</b> için açılacak modülleri ve demo süresini belirleyin.
-                    Davet onay sonrasında e-posta kuyruğuna alınır.
+                    <b>{selected.company || selected.email}</b> için şirket bilgilerini, açılacak
+                    modülleri ve demo süresini belirleyin. Davet onay sonrasında e-posta kuyruğuna
+                    alınır.
                   </p>
+                  <Field
+                    label="Ad soyad"
+                    required
+                    minLength={3}
+                    maxLength={100}
+                    value={form.fullName}
+                    onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  />
+                  <Field
+                    label="Şirket adı"
+                    required
+                    minLength={2}
+                    maxLength={200}
+                    value={form.company}
+                    onChange={(e) => setForm({ ...form, company: e.target.value })}
+                  />
+                  <Field
+                    label="Çalışan sayısı"
+                    type="number"
+                    required
+                    min="1"
+                    max="100000"
+                    value={form.employees}
+                    onChange={(e) => setForm({ ...form, employees: Number(e.target.value) })}
+                  />
                   <Field
                     label="Demo süresi (gün)"
                     type="number"
@@ -1986,7 +1535,12 @@ function Admin({ catalog }) {
                       maxLength={1000}
                       rows={4}
                       value={form.paymentInstructions}
-                      onChange={(e) => setForm({ ...form, paymentInstructions: e.target.value })}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          paymentInstructions: e.target.value,
+                        })
+                      }
                     />
                   </label>
                   <Notice>Teklif e-posta ile iletilir. Ödeme teyidi olmadan lisans açılmaz.</Notice>
@@ -2066,7 +1620,11 @@ function DemoWorkspace({ catalog }) {
     [tab, setTab] = useState('overview'),
     [purchase, setPurchase] = useState(null),
     [busy, setBusy] = useState(false),
-    [billing, setBilling] = useState({ billingCompany: '', taxNumber: '', billingAddress: '' }),
+    [billing, setBilling] = useState({
+      billingCompany: '',
+      taxNumber: '',
+      billingAddress: '',
+    }),
     [purchaseSuccess, setPurchaseSuccess] = useState(false);
   const initialized = useRef(false);
   const load = () =>
@@ -2180,7 +1738,8 @@ function DemoWorkspace({ catalog }) {
           <div className="demo-expiry">
             <Icon name="Timer" size={20} />
             <b>
-              {days} gün kaldı<small>{date(lead.license.expiresAt)} bitiş</small>
+              {days} gün kaldı
+              <small>{date(lead.license.expiresAt)} bitiş</small>
             </b>
           </div>
           <button
@@ -2446,7 +2005,11 @@ function DemoWorkspace({ catalog }) {
               purchase
               onSelect={(plan, cycle, count) => {
                 setPurchase({ plan, cycle, count });
-                setBilling({ billingCompany: lead.company, taxNumber: '', billingAddress: '' });
+                setBilling({
+                  billingCompany: lead.company,
+                  taxNumber: '',
+                  billingAddress: '',
+                });
                 setError('');
               }}
             />
@@ -2563,6 +2126,12 @@ function App() {
     <Admin catalog={catalog} />
   ) : path === '/demo-talebi' ? (
     <DemoRequest catalog={catalog} />
+  ) : ['/online-sunum-talep-et', '/online-sunum-talebi'].includes(path) ? (
+    <>
+      <Header catalog={catalog} />
+      <PresentationRequest catalog={catalog} api={api} />
+      <Footer catalog={catalog} />
+    </>
   ) : path === '/demo' ? (
     <DemoWorkspace catalog={catalog} />
   ) : path === '/giris' ? (

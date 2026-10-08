@@ -45,7 +45,8 @@ Site: http://localhost:4173 · Başvuru: `/demo-talebi` · Yönetim: `/admin` ·
 - Keşfet: dört özgün İK yazısı, beş indirilebilir altı sayfalık SenseIK PDF rehberi ve sekiz soruluk dijital İK olgunluk testi. Test sonucu için e-posta gerekmez; skor, öncelik önerileri ve 90 günlük rehber PDF'si sunulur.
 - Hesaplamalar: fazla mesai, gelir vergisi, işveren maliyeti, kıdem, maaş zammı, kurumlar vergisi, yemek bütçesi ve ihbar. 2026 parametreleri, varsayımlar ve resmî kaynak bağlantıları görünür; girdiler tarayıcıda hesaplanır.
 
-- Demo başvurusu: şirket, yetkili, e-posta, telefon, **tam çalışan sayısı**, paket ve modül tercihleri. Sunucu doğrulaması ve zorunlu aydınlatma kaydı.
+- Demo başvurusu: ana sayfadan veya `/demo-talebi` üzerinden şirket e-postası ve telefon numarası ile tek adımda talep. İki alan da zorunludur; telefon numarası yönetici listesi ve bildiriminde yer alır. Paket ve modül bağlantılarındaki tercihler korunur. Sunucu doğrulaması ve aydınlatma kaydı tutulur. Yönetici, onay öncesinde yetkili adını, şirketi ve çalışan sayısını tamamlar; eksik bilgilerle ürün hesabı açılmaz. Ayrıntılı başvuru API’si mevcut istemciler için korunur.
+- WhatsApp: `WHATSAPP_PHONE` ülke kodlu satış numarasıyla yapılandırıldığında formlarda ve sayfalarda “WhatsApp’tan yaz” bağlantısı görünür. Hazır demo mesajıyla sohbeti açar; mesaj otomatik gönderilmez. Numara yapılandırılmadığında bağlantı gösterilmez.
 - Yönetici: başvuru inceleme, kapsam ve süre seçerek onay, gerekçeli ret, davet yenileme, erişim iptali, arama ve durum filtresi.
 - E-posta: müşteri başvuru bildirimi, yönetici bildirimi, onay daveti ve teklif/lisans bildirimleri. SQLite outbox, yeniden deneme ve başarısız kayıtların takibi. SMTP yoksa **gönderilmiş sayılmaz**; yerel panelden içerik incelenebilir.
 - Demo: yalnız yönetici onayı sonrası tek kullanımlık e-posta bağlantısı. Token URL fragment'inde taşınır; sunucuda hash saklanır. HttpOnly/SameSite oturum. Süre ve iptal her istekte denetlenir.
